@@ -5,7 +5,7 @@ Convert rito's .bin files to custom text format:
  
 Convert it back:
 ```
-./ritobin2txt input.txt output.bin
+./txt2ritobin input.txt output.bin
 ```
  
  Sample output

@@ -167,7 +167,9 @@ namespace ritobin {
                     } else if (c == '\r') {
                         state = State::Escape_CariageReturn;
                     } else if (c == 'u') {
+                        // FIXME: implement unicode code points
                         state = State::Escape_Unicode_0;
+                        return false;
                     } else if (c == 'x') {
                         state = State::Escape_Byte_0;
                     } else {
@@ -209,9 +211,7 @@ namespace ritobin {
                     auto [p, ec] = std::from_chars(escaped, escaped + 4, value, 16);
                     if (ec == std::errc{} && p == escaped + 4) {
                         // FIXME: encode unicode
-                        // result.push_back(static_cast<char>(value));
-                    }
-                    else {
+                    } else {
                         return false;;
                     }
                 } else {

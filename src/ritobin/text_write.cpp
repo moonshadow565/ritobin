@@ -88,8 +88,32 @@ namespace ritobin {
 
         void write(std::string_view str) noexcept {
             write_raw("\"");
-            write_raw(str);
+            for (char c : str) {
+                if (c == '\t') { write_raw("\\t"); } 
+                else if (c == '\n') {  write_raw("\\n"); } 
+                else if (c == '\r') {  write_raw("\\r"); }
+                else if (c == '\b') {  write_raw("\\b"); }
+                else if (c == '\f') {  write_raw("\\f"); }
+                else if (c == '\\') { write_raw("\\\\"); }
+                else if (c == '"') { write_raw("\""); }
+                else if (c < 0x20 || c > 0x7E) {
+                    constexpr char digits[] = "0123456789abcdef";
+                    char hex[] = { 
+                        '\\', 'x', 
+                        digits[(c >> 4) & 0x0F],
+                        digits[c & 0x0F],
+                        '0', 
+                        '\0' 
+                    };
+                    write_raw(hex);
+                }
+                else { buffer_.push_back(c); }
+            }
             write_raw("\"");
+        }
+
+        void write(std::string const& str) noexcept {
+            write(std::string_view{str.data(), str.size()});
         }
 
 
@@ -284,7 +308,7 @@ namespace ritobin {
         }
 
         void write_value_visit(String const& value) noexcept {
-            writer.write_string(value.value);
+            writer.write(value.value);
         }
 
         void write_value_visit(None const&) noexcept {

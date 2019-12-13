@@ -1,32 +1,31 @@
-#include <cstring>
-#include <type_traits>
+#include <stdexcept>
 #include <charconv>
-#include <optional>
-#include <utility>
-#include <vector>
 #include "bin.hpp"
 
+
 namespace ritobin {
-    template<char...C>
-    inline constexpr bool one_of(char c) noexcept {
-        return ((c == C) || ...);
-    }
-
-    template<char F, char T>
-    inline constexpr bool in_range(char c) noexcept {
-        return c >= F && c <= T;
-    }
-
-    struct WordIter {
+    struct TextReader {
         char const* const beg_ = nullptr;
         char const* cur_ = nullptr;
         char const* const cap_ = nullptr;
+
+
+        template<char...C>
+        static inline constexpr bool one_of(char c) noexcept {
+            return ((c == C) || ...);
+        }
+
+        template<char F, char T>
+        static inline constexpr bool in_range(char c) noexcept {
+            return c >= F && c <= T;
+        }
+
 
         inline constexpr bool is_eof() const noexcept {
             return cur_ == cap_;
         }
 
-        inline constexpr size_t position() const noexcept{
+        inline constexpr size_t position() const noexcept {
             return cur_ - beg_;
         }
 
@@ -66,7 +65,7 @@ namespace ritobin {
             }
             return { beg, static_cast<size_t>(cur_ - beg) };
         }
-    
+
         constexpr bool read_nested_begin(bool& end) noexcept {
             if (read<'{'>()) {
                 next_newline();
@@ -99,29 +98,6 @@ namespace ritobin {
             }
             return false;
         }
-        
-        bool read_hash(uint32_t& value) noexcept {
-            auto const backup = cur_;
-            auto const word = read_word();
-            if (word.size() < 2) {
-                cur_ = backup;
-                return false;
-            }
-            if (word[0] != '0' || (word[1] != 'x' && word[1] != 'X')) {
-                cur_ = backup;
-                return false;
-            }
-            auto const beg = word.data() + 2;
-            auto const end = word.data() + word.size();
-            auto const [ptr, ec] = std::from_chars(beg, end, value, 16);
-            if (ptr == end && ec == std::errc{}) {
-                return true;
-            }
-            cur_ = backup;
-            return false;
-        }
-
-
 
         template<char Symbol>
         constexpr bool read() noexcept {
@@ -135,7 +111,7 @@ namespace ritobin {
             return false;
         }
 
-        bool read(std::string& result) noexcept {
+        bool read_string(std::string& result) noexcept {
             // FIXME: unicode verification
             while (!is_eof() && one_of<' ', '\t', '\r'>(*cur_)) {
                 cur_++;
@@ -143,7 +119,7 @@ namespace ritobin {
             if (cur_ == cap_) {
                 return false;
             }
-            if (*cur_ != '"' && *cur_ != '\"') {
+            if (*cur_ != '"' && *cur_ != '\'') {
                 return false;;
             }
             auto const term = *cur_;
@@ -170,7 +146,7 @@ namespace ritobin {
                     } else if (c == '\\') {
                         state = State::Take;
                         result.push_back('\\');
-                    }  else if (c == 'b') {
+                    } else if (c == 'b') {
                         state = State::Take;
                         result.push_back('\b');
                     } else if (c == 'f') {
@@ -234,13 +210,14 @@ namespace ritobin {
                     if (ec == std::errc{} && p == escaped + 4) {
                         // FIXME: encode unicode
                         // result.push_back(static_cast<char>(value));
-                    } else {
+                    }
+                    else {
                         return false;;
                     }
                 } else {
                     if (c == '\\') {
                         state = State::Escape;
-                    } else if (c < ' ') {
+                    }else if (c < ' ') {
                         return false;;
                     } else if (c == term) {
                         cur_++;
@@ -253,12 +230,29 @@ namespace ritobin {
             }
             return false;;
         }
-    
-        bool read(NameHash& value) {
-            value = {};
-            if (read_hash(value.value)) {
+
+
+        bool read_hash(FNV1a& value) noexcept {
+            auto const word = read_word();
+            if (word.size() < 2) {
+                return false;
+            }
+            if (word[0] != '0' || (word[1] != 'x' && word[1] != 'X')) {
+                return false;
+            }
+            auto const beg = word.data() + 2;
+            auto const end = word.data() + word.size();
+            uint32_t result = 0;
+            auto const [ptr, ec] = std::from_chars(beg, end, result, 16);
+            if (ptr == end && ec == std::errc{}) {
+                value = { result };
                 return true;
             }
+            return false;
+        }
+
+
+        bool read_name(std::string& value) {
             auto const word = read_word();
             if (word.empty()) {
                 return false;
@@ -274,19 +268,34 @@ namespace ritobin {
                     return false;
                 }
             }
-            value.unhashed = word;
+            value = { std::string(word) };
             return true;
         }
 
-        bool read(StringHash& value) {
-            value = {};
-            if (read_hash(value.value)) {
+        bool read_hash_name(FNV1a& value) {
+            auto const backup = cur_;
+            if (read_hash(value)) {
                 return true;
             }
-            if (!read(value.unhashed)) {
-                return false;
+            cur_ = backup;
+            if (std::string str; read_name(str)) {
+                value = { str };
+                return true;
             }
-            return true;
+            return false;
+        }
+
+        bool read_hash_string(FNV1a& value) {
+            auto const backup = cur_;
+            if (read_hash(value)) {
+                return true;
+            }
+            cur_ = backup;
+            if (std::string str; read_string(str)) {
+                value = { str };
+                return true;
+            }
+            return false;
         }
 
         bool read(bool& value) noexcept {
@@ -297,10 +306,12 @@ namespace ritobin {
             if (word == "true") {
                 value = true;
                 return true;
-            } else if (word == "false") {
+            }
+            else if (word == "false") {
                 value = false;
                 return true;
-            } else {
+            }
+            else {
                 return false;
             }
         }
@@ -310,33 +321,7 @@ namespace ritobin {
             if (name.empty()) {
                 return false;
             }
-            if (name == "none") { value = Type::NONE; }
-            else if (name == "bool") { value = Type::BOOL; }
-            else if (name == "i8") { value = Type::I8; }
-            else if (name == "u8") { value = Type::U8; }
-            else if (name == "i16") { value = Type::I16; }
-            else if (name == "u16") { value = Type::U16; }
-            else if (name == "i32") { value = Type::I32; }
-            else if (name == "u32") { value = Type::U32; }
-            else if (name == "i64") { value = Type::I64; }
-            else if (name == "u64") { value = Type::U64; }
-            else if (name == "f32") { value = Type::F32; }
-            else if (name == "vec2") { value = Type::VEC2; }
-            else if (name == "vec3") { value = Type::VEC3; }
-            else if (name == "vec4") { value = Type::VEC4; }
-            else if (name == "mtx44") { value = Type::MTX44; }
-            else if (name == "rgba") { value = Type::RGBA; }
-            else if (name == "string") { value = Type::STRING; }
-            else if (name == "hash") { value = Type::HASH; }
-            else if (name == "list") { value = Type::LIST; }
-            else if (name == "pointer") { value = Type::POINTER; }
-            else if (name == "embed") { value = Type::EMBED; }
-            else if (name == "link") { value = Type::LINK; }
-            else if (name == "option") { value = Type::OPTION; }
-            else if (name == "map") { value = Type::MAP; }
-            else if (name == "flag") { value = Type::FLAG; }
-            else { value = Type::NONE; return false; }
-            return true;
+            return ValueHelper::from_type_name(name, value);
         }
 
         template<typename T>
@@ -352,222 +337,173 @@ namespace ritobin {
             if (ptr == end && ec == std::errc{}) {
                 return true;
             }
+            // FIXME: this only works on msvc for now
+            // alternatively use: https://github.com/ulfjack/ryu
             return false;
         }
     };
 
-    struct ReadTextImpl {
-        WordIter word_;
-        std::vector<Node>& nodes;
-        std::string& error;
+    struct BinTextReader {
+        Bin& bin;
+        TextReader reader;
+        std::string error;
 
         bool process() noexcept {
-            nodes.clear();
+            bin.sections.clear();
             error.clear();
-            if (!process_sections()) {
-                error.append("Failed to read at: " + std::to_string(word_.position()));
+            if (!read_sections()) {
+                error.append("Failed to read @ " + std::to_string(reader.position()));
                 return false;
             }
             return true;
         }
+
     private:
-        inline void handle_section(std::string name, Value value) noexcept {
-            nodes.emplace_back(Section{ std::move(name), std::move(value) });
-        }
-
-        inline void handle_item(uint32_t index, Value value) noexcept {
-            nodes.emplace_back(Item{ std::move(index), std::move(value) });
-        }
-
-        inline void handle_field(NameHash key, Value value) noexcept {
-            nodes.emplace_back(Field{ std::move(key), std::move(value) });
-        }
-
-        inline void handle_pair(Value key, Value value) noexcept {
-            nodes.emplace_back(Pair{ std::move(key), std::move(value) });
-        }
-
-        inline void handle_nested_end(Type type, uint32_t count) noexcept {
-            nodes.emplace_back(NestedEnd{ std::move(type), std::move(count) });
-        }
-
-        inline bool fail_fast() noexcept {
-            return false;
-        }
-
         // NOTE: change this macro to include full stack messages
 #define bin_assert(...) do { if(!(__VA_ARGS__)) { return fail_fast(); } } while(false)
-        bool process_sections() noexcept {
-            NameHash name = {};
-            Value value = {};
-            word_.next_newline();
-            while (!word_.is_eof()) {
-                bin_assert(word_.read(name) && !name.unhashed.empty());
+        inline constexpr bool fail_fast() const noexcept { return false; }
+
+        bool read_sections() noexcept {
+            reader.next_newline();
+            while (!reader.is_eof()) {
+                std::string name = {};
+                Value value = {};
+                bin_assert(reader.read_name(name));
                 bin_assert(read_value_type(value));
-                bin_assert(word_.read<'='>());
+                bin_assert(reader.read<'='>());
                 bin_assert(read_value(value));
-                handle_section(name.unhashed, value);
-                bin_assert(process_value(value));
-                bin_assert(word_.is_eof() || word_.read_nested_separator());
+                bin_assert(reader.is_eof() || reader.read_nested_separator());
+                bin.sections.emplace(std::move(name), std::move(value));
             }
             return true;
         }
-
-        bool process_value_visit(List& value) noexcept {
-            uint32_t counter = 0;
-            auto item = Value_from_type(value.valueType);
-            bin_assert(read_nested([&,this]() {
-                bin_assert(read_value(item));
-                handle_item(counter, item);
-                bin_assert(process_value(item));
-                return true;
-                }, counter));
-            handle_nested_end(Type::LIST, counter);
-            return true;
-        }
-
-        bool process_value_visit(Option& value) noexcept {
-            uint32_t counter = 0;
-            auto item = Value_from_type(value.valueType);
-            bin_assert(read_nested([&, this]() {
-                bin_assert(counter == 0);
-                bin_assert(read_value(item));
-                handle_item(counter, item);
-                bin_assert(process_value(item));
-                return true;
-                }, counter));
-            handle_nested_end(Type::OPTION, counter);
-            return true;
-        }
-
-        bool process_value_visit(Map& value) noexcept {
-            uint32_t counter = 0;
-            auto key = Value_from_type(value.keyType);
-            auto item = Value_from_type(value.valueType);
-            bin_assert(read_nested([&, this]() {
-                bin_assert(read_value(key));
-                bin_assert(word_.read<'='>());
-                bin_assert(read_value(item));
-                handle_pair(key, item);
-                bin_assert(process_value(item));
-                return true;
-                }, counter));
-            handle_nested_end(Type::MAP, counter);
-            return true;
-        }
-
-        bool process_value_visit(Embed& value) noexcept {
-            uint32_t counter = 0;
-            NameHash name = {};
-            Value item = {};
-            bin_assert(read_nested([&, this]() {
-                bin_assert(word_.read(name));
-                bin_assert(read_value_type(item));
-                bin_assert(word_.read<'='>());
-                bin_assert(read_value(item));
-                handle_field(name, item);
-                bin_assert(process_value(item));
-                return true;
-                }, counter));
-            handle_nested_end(Type::EMBED, counter);
-            return true;
-        }
-
-        bool process_value_visit(Pointer& value) noexcept {
-            if (value.value.value != 0 || !value.value.unhashed.empty()) {
-                uint32_t counter = 0;
-                NameHash name = {};
-                Value item = {};
-                bin_assert(read_nested([&, this]() {
-                    bin_assert(word_.read(name));
-                    bin_assert(read_value_type(item));
-                    bin_assert(word_.read<'='>());
-                    bin_assert(read_value(item));
-                    handle_field(name, item);
-                    bin_assert(process_value(item));
-                    return true;
-                    }, counter));
-                handle_nested_end(Type::POINTER, counter);
-            }
-            return true;
-        }
-
-        template<typename T>
-        bool process_value_visit(T&) noexcept {
-            return true;
-        }
-
-        bool process_value(Value& value) noexcept {
-            return std::visit([this](auto&& value) {
-                return process_value_visit(value);
-                }, value);
-        }
-
-
+    
         bool read_value_type(Value& value) {
             Type type = {};
-            bin_assert(word_.read<':'>());
-            bin_assert(word_.read(type));
+            bin_assert(reader.read<':'>());
+            bin_assert(reader.read(type));
             bin_assert(type <= Type::FLAG);
 
             if (type == Type::LIST) {
                 List result = {};
-                bin_assert(word_.read <'['>());
-                bin_assert(word_.read(result.valueType));
-                bin_assert(word_.read <']'>());
+                bin_assert(reader.read <'['>());
+                bin_assert(reader.read(result.valueType));
+                bin_assert(reader.read <']'>());
                 value = result;
             } else if (type == Type::OPTION) {
                 Option result = {};
-                bin_assert(word_.read <'['>());
-                bin_assert(word_.read(result.valueType));
-                bin_assert(word_.read <']'>());
+                bin_assert(reader.read <'['>());
+                bin_assert(reader.read(result.valueType));
+                bin_assert(reader.read <']'>());
                 value = result;
             } else if (type == Type::MAP) {
                 Map result = {};
-                bin_assert(word_.read <'['>());
-                bin_assert(word_.read(result.keyType));
-                bin_assert(word_.read <','>());
-                bin_assert(word_.read(result.valueType));
-                bin_assert(word_.read <']'>());
+                bin_assert(reader.read <'['>());
+                bin_assert(reader.read(result.keyType));
+                bin_assert(reader.read <','>());
+                bin_assert(reader.read(result.valueType));
+                bin_assert(reader.read <']'>());
                 value = result;
             } else {
-                value = Value_from_type(type);
+                value = ValueHelper::from_type(type);
+            }
+            return true;
+        }
+
+        bool read_value(Value& value) noexcept {
+            return std::visit([this](auto&& value) { return read_value_visit(value); }, value);
+        }
+
+        bool read_value_visit(List& value) noexcept {
+            bool end = false;
+            bin_assert(reader.read_nested_begin(end));
+            while (!end) {
+                auto item = ValueHelper::from_type(value.valueType);
+                bin_assert(read_value(item));
+                bin_assert(reader.read_nested_separator_or_end(end));
+                value.items.emplace_back(Element{ std::move(item) });
+            }
+            return true;
+        }
+
+        bool read_value_visit(Option& value) noexcept {
+            bool end = false;
+            bin_assert(reader.read_nested_begin(end));
+            if (!end) {
+                auto item = ValueHelper::from_type(value.valueType);
+                bin_assert(read_value(item));
+                bin_assert(reader.read_nested_separator_or_end(end));
+                bin_assert(end);
+                value.items.emplace_back(Element{ std::move(item) });
+            }
+            return true;
+        }
+
+        bool read_value_visit(Map& value) noexcept {
+            bool end = false;
+            bin_assert(reader.read_nested_begin(end));
+            while (!end) {
+                auto key = ValueHelper::from_type(value.keyType);
+                auto item = ValueHelper::from_type(value.valueType);
+                bin_assert(read_value(key));
+                bin_assert(reader.read<'='>());
+                bin_assert(read_value(item));
+                bin_assert(reader.read_nested_separator_or_end(end));
+                value.items.emplace_back(Pair{ std::move(key), std::move(item) });
+            }
+            return true;
+        }
+
+        bool read_value_visit(Embed& value) noexcept {
+            bin_assert(reader.read_hash_name(value.name));
+            bool end = false;
+            bin_assert(reader.read_nested_begin(end));
+            while (!end) {
+                FNV1a name = {};
+                Value item = {};
+                bin_assert(reader.read_hash_name(name));
+                bin_assert(read_value_type(item));
+                bin_assert(reader.read<'='>());
+                bin_assert(read_value(item));
+                bin_assert(reader.read_nested_separator_or_end(end));
+                value.items.emplace_back(Field{ std::move(name), std::move(item) });
+            }
+            return true;
+        }
+
+        bool read_value_visit(Pointer& value) noexcept {
+            bin_assert(reader.read_hash_name(value.name));
+            if (value.name.str() == "null") {
+                value.name = {};
+                return true;
+            }
+            bool end = false;
+            bin_assert(reader.read_nested_begin(end));
+            while (!end) {
+                FNV1a name = {};
+                Value item = {};
+                bin_assert(reader.read_hash_name(name));
+                bin_assert(read_value_type(item));
+                bin_assert(reader.read<'='>());
+                bin_assert(read_value(item));
+                bin_assert(reader.read_nested_separator_or_end(end));
+                value.items.emplace_back(Field{ std::move(name), std::move(item) });
             }
             return true;
         }
 
         bool read_value_visit(String& value) noexcept {
-            bin_assert(word_.read(value.value));
+            bin_assert(reader.read_string(value.value));
             return true;
         }
 
-        bool read_value_visit(Map& value) noexcept {
+        bool read_value_visit(Link& value) noexcept {
+            bin_assert(reader.read_hash_string(value.value));
             return true;
         }
 
-        bool read_value_visit(List& value) noexcept {
-            return true;
-        }
-
-        bool read_value_visit(Option& value) noexcept {
-            return true;
-        }
-
-        bool read_value_visit(Embed& value) noexcept {
-            bin_assert(word_.read(value.value));
-            return true;
-        }
-
-        bool read_value_visit(Pointer& value) noexcept {
-            bin_assert(word_.read(value.value));
-            if (value.value.value == 0 && value.value.unhashed == "null") {
-                value.value = {};
-            }
-            return true;
-        }
-
-        bool read_value_visit(None& value) noexcept {
-            // FIXME: ???
+        bool read_value_visit(Hash& value) noexcept {
+            bin_assert(reader.read_hash_string(value.value));
             return true;
         }
 
@@ -591,48 +527,39 @@ namespace ritobin {
             return read_array(value.value);
         }
 
-        template<typename T>
-        bool read_value_visit(T& value) noexcept {
-            bin_assert(word_.read(value.value));
+        bool read_value_visit(None& value) noexcept {
+            std::string name;
+            bin_assert(reader.read_name(name));
+            bin_assert(name == "null");
             return true;
         }
 
-        bool read_value(Value& value) noexcept {
-             return std::visit([this](auto&& value) {
-                    return read_value_visit(value);
-                }, value);
-        }
-
-        template<typename F>
-        bool read_nested(F&& nested, uint32_t& counter) noexcept {
-            bool end = false;
-            counter = 0;
-            bin_assert(word_.read_nested_begin(end));
-            while (!end) {
-                bin_assert(nested());
-                bin_assert(word_.read_nested_separator_or_end(end));
-                counter++;
-            }
+        template<typename T>
+        bool read_value_visit(T& value) noexcept {
+            bin_assert(reader.read(value.value));
             return true;
         }
 
         template<typename T, size_t S>
         bool read_array(std::array<T, S>& value) noexcept {
             uint32_t counter = 0;
-            bin_assert(read_nested([&, this]() {
+            bool end = false;
+            bin_assert(reader.read_nested_begin(end));
+            while (!end) {
                 bin_assert(counter < S);
-                bin_assert(word_.read(value[counter]));
-                return true;
-                }, counter));
+                bin_assert(reader.read(value[counter]));
+                bin_assert(reader.read_nested_separator_or_end(end));
+                counter++;
+            }
             bin_assert(counter == static_cast<uint32_t>(S));
             return true;
         }
     };
 
-    bool text_read(std::string_view data, std::vector<Node>& result, std::string& error) noexcept {
-        ReadTextImpl reader{
-            { data.data(), data.data(), data.data() + data.size() }, result, error
-        };
-        return reader.process();
+    void Bin::read_text(char const* data, size_t size) {
+        BinTextReader reader = { *this, { data, data, data + size } };
+        if (!reader.process()) {
+            throw std::runtime_error(std::move(reader.error));
+        }
     }
 }

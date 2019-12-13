@@ -3,12 +3,13 @@
 
 #include <cinttypes>
 #include <cstddef>
+#include <cstring>
 #include <string>
 #include <string_view>
 #include <variant>
 #include <array>
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 namespace ritobin {
     enum class Type {
@@ -39,155 +40,210 @@ namespace ritobin {
         FLAG = 24,
     };
 
-    inline constexpr uint32_t fnv1a(std::string_view str) noexcept {
-        uint32_t h = 0x811c9dc5;
-        for (uint32_t c : str) {
-            c = c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
-            h = ((h ^ c) * 0x01000193) & 0xFFFFFFFF;
+    struct FNV1a {
+    private:
+        uint32_t hash_ = 0;
+        std::string str_ = {};
+        static inline constexpr uint32_t fnv1a(std::string_view str) noexcept {
+            uint32_t h = 0x811c9dc5;
+            for (uint32_t c : str) {
+                c = c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
+                h = ((h ^ c) * 0x01000193) & 0xFFFFFFFF;
+            }
+            return h;
         }
-        return h;
-    }
+    public:
+        inline FNV1a() noexcept = default;
 
-    struct NameHash {
-        uint32_t value;
-        std::string unhashed;
+        inline FNV1a(std::string str) noexcept : hash_(fnv1a(str)), str_(std::move(str)) {}
 
+        inline FNV1a(uint32_t h) noexcept : hash_(h), str_() {}
+
+        inline FNV1a& operator=(std::string str) noexcept {
+            hash_ = fnv1a(str);
+            str_ = std::move(str);
+            return *this;
+        }
+
+        inline FNV1a& operator=(uint32_t h) noexcept {
+            hash_ = h;
+            str_.clear();
+            return *this;
+        }
+        
         inline uint32_t hash() const noexcept {
-            return !unhashed.empty() ? fnv1a(unhashed) : value;
+            return hash_;
+        }
+
+        inline std::string_view str() const& noexcept {
+            return str_;
+        }
+
+        inline std::string str() && noexcept {
+            return std::move(str_);
         }
     };
 
-    struct StringHash {
-        uint32_t value;
-        std::string unhashed;
+    struct Element;
+    struct Field;
+    struct Pair;
 
-        inline uint32_t hash() const noexcept {
-            return !unhashed.empty() ? fnv1a(unhashed) : value;
-        }
-    };
+    using ElementList = std::vector<Element>;
+    using FieldList = std::vector<Field>;
+    using PairList = std::vector<Pair>;
 
     struct None {
         static inline constexpr Type type = Type::NONE;
+        static inline constexpr char type_name[] = "none";
     };
-    
+
     struct Bool {
         static inline constexpr Type type = Type::BOOL;
+        static inline constexpr char type_name[] = "bool";
         bool value;
     };
-    
+
     struct I8 {
         static inline constexpr Type type = Type::I8;
+        static inline constexpr char type_name[] = "i8";
         int8_t value;
     };
 
     struct U8 {
         static inline constexpr Type type = Type::U8;
+        static inline constexpr char type_name[] = "u8";
         uint8_t value;
     };
 
     struct I16 {
         static inline constexpr Type type = Type::I16;
+        static inline constexpr char type_name[] = "i16";
         int16_t value;
     };
 
     struct U16 {
         static inline constexpr Type type = Type::U16;
+        static inline constexpr char type_name[] = "u16";
         uint16_t value;
     };
 
     struct I32 {
         static inline constexpr Type type = Type::I32;
+        static inline constexpr char type_name[] = "i32";
         int32_t value;
     };
 
     struct U32 {
         static inline constexpr Type type = Type::U32;
+        static inline constexpr char type_name[] = "u32";
         uint32_t value;
     };
 
     struct I64 {
         static inline constexpr Type type = Type::I64;
+        static inline constexpr char type_name[] = "i64";
         int64_t value;
     };
 
     struct U64 {
         static inline constexpr Type type = Type::U64;
+        static inline constexpr char type_name[] = "u64";
         uint64_t value;
     };
 
     struct F32 {
         static inline constexpr Type type = Type::F32;
+        static inline constexpr char type_name[] = "f32";
         float value;
     };
 
     struct Vec2 {
         static inline constexpr Type type = Type::VEC2;
+        static inline constexpr char type_name[] = "vec2";
         std::array<float, 2> value;
     };
 
     struct Vec3 {
         static inline constexpr Type type = Type::VEC3;
+        static inline constexpr char type_name[] = "vec3";
         std::array<float, 3> value;
     };
 
     struct Vec4 {
         static inline constexpr Type type = Type::VEC4;
+        static inline constexpr char type_name[] = "vec4";
         std::array<float, 4> value;
     };
 
     struct Mtx44 {
         static inline constexpr Type type = Type::MTX44;
+        static inline constexpr char type_name[] = "mtx44";
         std::array<float, 16> value;
     };
 
     struct RGBA {
         static inline constexpr Type type = Type::RGBA;
+        static inline constexpr char type_name[] = "rgba";
         std::array<uint8_t, 4> value;
     };
 
     struct String {
         static inline constexpr Type type = Type::STRING;
+        static inline constexpr char type_name[] = "string";
         std::string value;
     };
 
     struct Hash {
         static inline constexpr Type type = Type::HASH;
-        StringHash value;
+        static inline constexpr char type_name[] = "hash";
+        FNV1a value;
     };
 
     struct List {
         static inline constexpr Type type = Type::LIST;
+        static inline constexpr char type_name[] = "list";
         Type valueType;
+        ElementList items;
     };
 
     struct Pointer {
         static inline constexpr Type type = Type::POINTER;
-        NameHash value;
+        static inline constexpr char type_name[] = "pointer";
+        FNV1a name;
+        FieldList items;
     };
 
     struct Embed {
         static inline constexpr Type type = Type::EMBED;
-        NameHash value;
+        static inline constexpr char type_name[] = "embed";
+        FNV1a name;
+        FieldList items;
     };
 
     struct Link {
         static inline constexpr Type type = Type::LINK;
-        StringHash value;
+        static inline constexpr char type_name[] = "link";
+        FNV1a value;
     };
 
     struct Option {
         static inline constexpr Type type = Type::OPTION;
+        static inline constexpr char type_name[] = "option";
         Type valueType;
+        ElementList items;
     };
 
     struct Map {
         static inline constexpr Type type = Type::MAP;
+        static inline constexpr char type_name[] = "map";
         Type keyType;
         Type valueType;
+        PairList items;
     };
 
     struct Flag {
         static inline constexpr Type type = Type::FLAG;
+        static inline constexpr char type_name[] = "flag";
         bool value;
     };
 
@@ -219,32 +275,7 @@ namespace ritobin {
         Flag
     >;
 
-    inline constexpr Type Value_type(Value const& value) noexcept {
-        return std::visit([](auto&& value){
-            return value.type;
-        }, value);
-    }
-
-    inline Value Value_from_type(Type type) noexcept {
-        return []<typename...T>(std::variant<T...> const&, Type type) -> Value {
-            Value result;
-            ((T::type == type ? (result = T{}, true) : false) || ... );
-            return result;
-        } (Value{}, type);
-    }
-
-    struct Section {
-        std::string name;
-        Value value;
-    };
-
-    struct Item {
-        uint32_t index;
-        Value value;
-    };
-
-    struct Field {
-        NameHash name;
+    struct Element {
         Value value;
     };
 
@@ -253,32 +284,70 @@ namespace ritobin {
         Value value;
     };
 
-    struct NestedEnd {
-        Type type;
-        uint32_t count;
+    struct Field {
+        FNV1a key;
+        Value value;
     };
 
-    using Node = std::variant <
-        Section,
-        Item,
-        Field,
-        Pair,
-        NestedEnd
-    >;
+    template<typename> struct ValueHelperImpl;
 
-    using NodeList = std::vector<Node>;
-    using LookupTable = std::map<uint32_t, std::string>;
+    template<typename...T> struct ValueHelperImpl<std::variant<T...>> {
+
+        static inline Type to_type(Value const& value) noexcept {
+            return std::visit([](auto&& value) { return value.type; }, value);
+        }
+
+        static inline Value from_type(Type type) noexcept {
+            Value value = None{};
+            ((T::type == type ? (value = T{}, true) : false) || ...);
+            return value;
+        }
+
+        static inline std::string_view to_type_name(Value const& value) noexcept {
+            return std::visit([](auto&& value) { return value.type_name; }, value);
+        }
+
+        static inline std::string_view to_type_name(Type type) noexcept {
+            std::string_view type_name = {};
+            ((T::type == type ? (type_name = T::type_name, true) : false) || ...);
+            return type_name;
+        }
+
+        static inline Value from_type_name(std::string_view type_name) noexcept {
+            Value value = None{};
+            ((type_name == T::type_name ? (value = T{}, true) : false) || ...);
+            return value;
+        }
+
+        static inline bool from_type_name(std::string_view type_name, Type& type) noexcept {
+            return ((type_name == T::type_name ? (type = T::type, true) : false) || ...);
+        }
+    };
+    using ValueHelper = ValueHelperImpl<Value>;
 
 
-    extern bool binary_read(std::string_view data, NodeList& result, std::string& error) noexcept;
-    extern bool text_read(std::string_view data, NodeList& result, std::string& error) noexcept;
+    struct Bin {
+        std::unordered_map<std::string, Value> sections;
 
-    extern bool binary_write(NodeList const& nodes, std::vector<char>& result, std::string& error) noexcept;
-    extern bool text_write(NodeList const& nodes, std::vector<char>& result, std::string& error) noexcept;
+        void read_binary(char const* data, size_t size);
+        void read_binary_file(std::string const& filename);
+        void write_binary(std::vector<char>& out) const;
+        void write_binary_file(std::string const& filename) const;
 
-    extern void lookup_load_CDTB(std::string const& filename, LookupTable& lookup) noexcept;
+        void read_text(char const* data, size_t size);
+        void read_text_file(std::string const& filename);
+        void write_text(std::vector<char>& out, size_t ident_size = 2) const;
+        void write_text_file(std::string const& filename, size_t ident_size = 2) const;
+    };
 
-    extern void lookup_unhash(LookupTable const& lookup, NodeList& nodes) noexcept;
+
+    using HashTable = std::unordered_map<uint32_t, std::string>;
+    struct BinUnhasher {
+        HashTable lookup;
+
+        void unhash(Bin& bin) const noexcept;
+        bool load_CDTB(std::string const& filename) noexcept;
+    };
 }
 
 #endif // RITOBIN_HPP

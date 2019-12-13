@@ -1,59 +1,43 @@
 #include <iostream>
 #include <fstream>
 #include <cstdio>
+#include <filesystem>
 #include "ritobin/bin.hpp"
 
+namespace fs = std::filesystem; 
 int main(int argc, char** argv) {
-    if (argc != 3) {
+    if (argc < 2) {
         puts("ritobin2txt <input bin file> <output txt file>");
         return -1;
     }
 
-    std::vector<char> indata;
-    if (std::ifstream file(argv[1], std::ios::binary); file) {
-        auto const start = file.tellg();
-        file.seekg(static_cast<std::ifstream::off_type>(0), std::ifstream::end);
-        auto const end = file.tellg();
-        file.seekg(start);
-        indata.resize(static_cast<size_t>(end - start));
-        file.read(indata.data(), indata.size());
-    } else {
-        puts("Input file not found!");
-        return -1;
+    fs::path exedir = fs::path(argv[0]).parent_path();
+    fs::path infile = argv[1];
+    fs::path outfile = argc > 2 ? argv[2] : "";
+    if (argc < 3) {
+        outfile = infile;
+        outfile.replace_extension("qml");
     }
 
-    std::string error = {};
-    ritobin::NodeList nodes = {};
-    if(!ritobin::binary_read({ indata.data(), indata.size() }, nodes, error)) {
-        puts("Failed to read:");
-        puts(error.c_str());
-        return -1;
-    }
+    ritobin::BinUnhasher unhasher = {};
+    unhasher.load_CDTB((exedir / "hashes.binentries.txt").string());
+    unhasher.load_CDTB((exedir / "hashes.binhashes.txt").string());
+    unhasher.load_CDTB((exedir / "hashes.bintypes.txt").string());
+    unhasher.load_CDTB((exedir / "hashes.binfields.txt").string());
 
-    ritobin::LookupTable lookup = {};
-    ritobin::lookup_load_CDTB("hashes.binentries.txt", lookup);
-    ritobin::lookup_load_CDTB("hashes.binhashes.txt", lookup);
-    ritobin::lookup_load_CDTB("hashes.bintypes.txt", lookup);
-    ritobin::lookup_load_CDTB("hashes.binfields.txt", lookup);
-    ritobin::lookup_unhash(lookup, nodes);
-
-    std::vector<char> outdata = {};
-    if (!ritobin::text_write(nodes, outdata, error)) {
-        puts("Failed to write:");
-        puts(error.c_str());
-        return -1;
-    }
-
-    /*
-    if (std::string name(argv[2]); name == "-") {
-        fwrite(outdata.data(), 1, outdata.size(), stdout);
+    try {
+        ritobin::Bin bin = {};
+        bin.read_binary_file(infile.string());
+        unhasher.unhash(bin);
+        bin.write_text_file(outfile.string(), 4);
         return 0;
-    }
-    */    
-    if (std::ofstream file(argv[2], std::ios::binary); file) {
-        file.write(outdata.data(), outdata.size());
-    } else {
-        puts("Output file not found!");
+    } catch(std::runtime_error const& err) {
+        puts("Error: ");
+        puts(err.what());
+        if (argc < 3) { 
+            puts("Press enter to continue...");
+            int c = getc(stdin);
+        }
         return -1;
     }
 }

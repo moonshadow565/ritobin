@@ -1,12 +1,8 @@
-#include <vector>
-#include <cstring>
-#include <string_view>
-#include <array>
+#include <stdexcept>
 #include "bin.hpp"
 
-
 namespace ritobin {
-    struct BytesIter {
+    struct BinaryReader {
         char const* const beg_;
         char const* cur_;
         char const* const cap_;
@@ -79,273 +75,223 @@ namespace ritobin {
             return value <= Type::FLAG;
         }
 
-        bool read(NameHash& value) noexcept {
-            // TODO: verify a-zA-Z0-9_
-            value = {};
-            return read(value.value);
-        }
-
-        bool read(StringHash& value) noexcept {
-            // TODO: verify utf-8
-            value = {};
-            return read(value.value);
+        bool read(FNV1a& value) noexcept {
+            uint32_t h;
+            if (!read(h)) {
+                return false;
+            }
+            value = { h };
+            return true;
         }
     };
 
-    struct ReadBinaryImpl {
-        BytesIter bytes_;
-        std::vector<Node>& nodes;
-        std::string& error;
+    struct BinBinaryReader {
+        Bin& bin;
+        BinaryReader reader;
+        std::string error;
 
         bool process() noexcept {
-            nodes.clear();
+            bin.sections.clear();
             error.clear();
-            if (!process_sections()) {
-                error.append("Failed to read at: " + std::to_string(bytes_.position()));
+            if (!read_sections()) {
+                error.append("Failed to read @ " + std::to_string(reader.position()));
                 return false;
             }
             return true;
         }
+
     private:
-        inline void handle_section(std::string name, Value value) noexcept {
-            nodes.emplace_back(Section{ std::move(name), std::move(value) });
-        }
-
-        inline void handle_item(uint32_t index, Value value) noexcept {
-            nodes.emplace_back(Item{ std::move(index), std::move(value) });
-        }
-
-        inline void handle_field(NameHash key, Value value) noexcept {
-            nodes.emplace_back(Field{ std::move(key), std::move(value) });
-        }
-
-        inline void handle_pair(Value key, Value value) noexcept {
-            nodes.emplace_back(Pair{ std::move(key), std::move(value) });
-        }
-
-        inline void handle_nested_end(Type type, uint32_t count) noexcept {
-            nodes.emplace_back(NestedEnd{ std::move(type), std::move(count) });
-        }
-
-        inline bool fail_fast() noexcept {
-            return false;
-        }
-
-// NOTE: change this macro to include full stack messages
+        // NOTE: change this macro to include full stack messages
 #define bin_assert(...) do { if(!(__VA_ARGS__)) { return fail_fast(); } } while(false)
+        inline constexpr bool fail_fast() const noexcept { return false; }
 
-        bool read_value(Value& value, Type type) noexcept {
-            value = Value_from_type(type);
-            return std::visit([this](auto&& value) -> bool {
-                return read_value_visit(value);
-                }, value);
-        }
-
-        bool read_value_visit(Embed& value) {
-            bin_assert(bytes_.read(value.value));
-            return true;
-        }
-
-        bool read_value_visit(Pointer& value) {
-            bin_assert(bytes_.read(value.value));
-            return true;
-        }
-
-        bool read_value_visit(List& value) {
-            bin_assert(bytes_.read(value.valueType));
-            return true;
-        }
-
-        bool read_value_visit(Option& value) {
-            bin_assert(bytes_.read(value.valueType));
-            return true;
-        }
-
-        bool read_value_visit(Map& value) {
-            bin_assert(bytes_.read(value.keyType));
-            bin_assert(bytes_.read(value.valueType));
-            return true;
-        }
-
-        bool read_value_visit(None&) {
-            return true;
-        }
-
-        template<typename T>
-        bool read_value_visit(T& value) {
-            bin_assert(bytes_.read(value.value));
-            return true;
-        }
-
-        bool process_sections() noexcept {
+        bool read_sections() noexcept {
             std::array<char, 4> magic = {};
             uint32_t version = 0;
-            bin_assert(bytes_.read(magic));
+            bin_assert(reader.read(magic));
             if (magic == std::array{ 'P', 'T', 'C', 'H' }) {
                 uint64_t unk = {};
-                bin_assert(bytes_.read(unk));
-                bin_assert(bytes_.read(magic));
-                handle_section("type" , String{ "PTCH" });
+                bin_assert(reader.read(unk));
+                bin_assert(reader.read(magic));
+                bin.sections.emplace("type", String{ "PTCH" });
             } else {
-                handle_section("type", String{ "PROP" });
+                bin.sections.emplace("type", String{ "PROP" });
             }
             bin_assert(magic == std::array{ 'P', 'R', 'O', 'P' });
-            bin_assert(bytes_.read(version));
-            handle_section("version", U32{ version });
+            bin_assert(reader.read(version));
+            bin.sections.emplace("version", U32{ version });
 
-            if (version >= 2) {
-                bin_assert(process_linked());
-            }
-
-            bin_assert(process_entries());
+            bin_assert(read_linked(version >= 2));
+            bin_assert(read_entries());
+            bin_assert(reader.cur_ == reader.cap_);
             return true;
         }
 
-        bool process_linked() noexcept {
-            uint32_t linkedFilesCount = {};
-            String linked = {};
-            bin_assert(bytes_.read(linkedFilesCount));
-
-            handle_section("linked", List{ Type::STRING });
-            for (uint32_t i = 0; i < linkedFilesCount; i++) {
-                bin_assert(bytes_.read(linked.value));
-                handle_item(i, linked);
-            }
-            handle_nested_end(Type::LIST, linkedFilesCount);
-            return true;
-        }
-
-        bool process_entries() noexcept {
-            uint32_t entryCount = 0;
-            std::vector<uint32_t> entryTypes;
-            bin_assert(bytes_.read(entryCount));
-            bin_assert(bytes_.read(entryTypes, entryCount));
-
-            handle_section("entries", Map { Type::HASH, Type::EMBED });
-            for (uint32_t type : entryTypes) {
-                bin_assert(process_entry(type));
-            }
-            handle_nested_end(Type::MAP, entryCount);
-            return true;
-        }
-
-        bool process_entry(uint32_t type)  noexcept {
-            uint32_t entryLength;
-            StringHash hash;
-            uint16_t count;
-            bin_assert(bytes_.read(entryLength));
-            bin_assert(bytes_.read(hash));
-            bin_assert(bytes_.read(count));
-
-            handle_pair(Hash{ hash }, Pointer{ type });
-            for (uint32_t i = 0; i < count; i++) {
-                bin_assert(process_field());
-            }
-            handle_nested_end(Type::POINTER, count);
-            return true;
-        }
-
-        bool process_field() noexcept {
-            NameHash key;
-            Type type;
-            Value value;
-            bin_assert(bytes_.read(key.value));
-            bin_assert(bytes_.read(type));
-            bin_assert(read_value(value, type));
-
-            handle_field(key, value);
-            bin_assert(process_value(value));
-            return true;
-        }
-
-        bool process_value_visit(Pointer const& pointer) noexcept {
-            if (pointer.value.value != 0) {
-                uint32_t size = 0;
-                uint16_t count = 0;
-                bin_assert(bytes_.read(size));
-                bin_assert(bytes_.read(count));
-                for (uint32_t i = 0; i < count; i++) {
-                    bin_assert(process_field());
+        bool read_linked(bool hasLinks) noexcept {
+            List linkedList = { Type::STRING };
+            if (hasLinks) {
+                uint32_t linkedFilesCount = {};
+                bin_assert(reader.read(linkedFilesCount));
+                for (uint32_t i = 0; i != linkedFilesCount; i++) {
+                    String linked = {};
+                    bin_assert(reader.read(linked.value));
+                    linkedList.items.emplace_back(Element{ linked });
                 }
-                handle_nested_end(pointer.type, count);
             }
+            bin.sections.emplace("linked", std::move(linkedList));
             return true;
         }
 
-        bool process_value_visit(Embed const& embed) noexcept {
+        bool read_entries() noexcept {
+            uint32_t entryCount = 0;
+            std::vector<uint32_t> entryNameHashes;
+            bin_assert(reader.read(entryCount));
+            bin_assert(reader.read(entryNameHashes, entryCount));
+            Map entriesMap = { Type::HASH,  Type::EMBED };
+            for (uint32_t entryNameHash : entryNameHashes) {
+                Hash entryKeyHash = {};
+                Embed entry = { { entryNameHash } };
+                bin_assert(read_entry(entryKeyHash, entry));
+                entriesMap.items.emplace_back(Pair{ std::move(entryKeyHash), std::move(entry) });
+            }
+            bin.sections.emplace("entries", std::move(entriesMap));
+            return true;
+        }
+
+        bool read_entry(Hash& entryKeyHash, Embed& entry) noexcept {
+            uint32_t entryLength = 0;
+            uint16_t count = 0;
+            bin_assert(reader.read(entryLength));
+            size_t position = reader.position();
+            bin_assert(reader.read(entryKeyHash.value));
+            bin_assert(reader.read(count));
+            for (size_t i = 0; i != count; i++) {
+                auto& [name, item] = entry.items.emplace_back();
+                Type type = {};
+                bin_assert(reader.read(name));
+                bin_assert(reader.read(type));
+                bin_assert(read_value_of(item, type));
+            }
+            bin_assert(reader.position() == position + entryLength);
+            return true;
+        }
+
+        bool read_value_of(Value& value, Type type) noexcept {
+            value = ValueHelper::from_type(type);
+            return std::visit([this](auto&& value) {
+                return read_value_visit(std::forward<decltype(value)>(value));
+            }, value);
+        }
+
+        bool read_value_visit(None&) noexcept { 
+            bin_assert(false);
+            return true;
+        }
+
+        bool read_value_visit(Embed& value) noexcept {
             uint32_t size = 0;
             uint16_t count = 0;
-            bin_assert(bytes_.read(size));
-            bin_assert(bytes_.read(count));
-            for (uint32_t i = 0; i < count; i++) {
-                bin_assert(process_field());
+            bin_assert(reader.read(value.name));
+            bin_assert(reader.read(size));
+            size_t position = reader.position();
+            bin_assert(reader.read(count));
+            for (size_t i = 0; i != count; i++) {
+                auto& [name, item] = value.items.emplace_back();
+                Type type;
+                bin_assert(reader.read(name));
+                bin_assert(reader.read(type));
+                bin_assert(read_value_of(item, type));
             }
-            handle_nested_end(embed.type, count);
+            bin_assert(reader.position() == position + size);
             return true;
         }
 
-        bool process_value_visit(List const& list) noexcept {
-            uint32_t size;
-            uint32_t count;
-            Value value = None{};
-            bin_assert(bytes_.read(size));
-            bin_assert(bytes_.read(count));
-            for (uint32_t i = 0; i < count; i++) {
-                bin_assert(read_value(value, list.valueType));
-                handle_item(i, value);
-                bin_assert(process_value(value));
+        bool read_value_visit(Pointer& value) noexcept {
+            uint32_t size = 0;
+            uint16_t count = 0;
+            bin_assert(reader.read(value.name));
+            if (value.name.hash() == 0) {
+                return true;
             }
-            handle_nested_end(list.type, count);
+            bin_assert(reader.read(size));
+            size_t position = reader.position();
+            bin_assert(reader.read(count));
+            for (size_t i = 0; i != count; i++) {
+                auto& [name, item] = value.items.emplace_back();
+                Type type = {};
+                bin_assert(reader.read(name));
+                bin_assert(reader.read(type));
+                bin_assert(read_value_of(item, type));
+            }
+            bin_assert(reader.position() == position + size);
             return true;
         }
 
-        bool process_value_visit(Option const& option) noexcept {
-            uint8_t count;
-            bin_assert(bytes_.read(count));
+        bool read_value_visit(Option& value) noexcept {
+            uint8_t count = 0;
+            bin_assert(reader.read(value.valueType));
+            bin_assert(value.valueType != Type::MAP);
+            bin_assert(value.valueType != Type::LIST);
+            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(reader.read(count));
             if (count != 0) {
-                Value value = None{};
-                bin_assert(read_value(value, option.valueType));
-                handle_item(1, value);
-                bin_assert(process_value(value));
+                auto& [item] = value.items.emplace_back();
+                bin_assert(read_value_of(item, value.valueType));
             }
-            handle_nested_end(option.type, count);
             return true;
         }
 
-        bool process_value_visit(Map const& map) noexcept {
-            uint32_t size;
-            uint32_t count;
-            Value key;
-            Value value;
-            bin_assert(bytes_.read(size));
-            bin_assert(bytes_.read(count));
-            for (uint32_t i = 0; i < count; i++) {
-                bin_assert(read_value(key, map.keyType));
-                bin_assert(read_value(value, map.valueType));
-                handle_pair(key, value);
-                bin_assert(process_value(value));
+        bool read_value_visit(List& value) noexcept {
+            uint32_t size = 0;
+            uint32_t count = 0;
+            bin_assert(reader.read(value.valueType));
+            bin_assert(value.valueType != Type::MAP);
+            bin_assert(value.valueType != Type::LIST);
+            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(reader.read(size));
+            size_t position = reader.position();
+            bin_assert(reader.read(count));
+            for (size_t i = 0; i != count; i++) {
+                auto& [item] = value.items.emplace_back();
+                bin_assert(read_value_of(item, value.valueType));
             }
-            handle_nested_end(map.type, count);
+            bin_assert(reader.position() == position + size);
             return true;
         }
 
+        bool read_value_visit(Map& value) noexcept {
+            uint32_t size = 0;
+            uint32_t count = 0;
+            bin_assert(reader.read(value.keyType));
+            bin_assert(value.keyType <= Type::HASH);
+            bin_assert(reader.read(value.valueType));
+            bin_assert(value.valueType != Type::MAP);
+            bin_assert(value.valueType != Type::LIST);
+            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(reader.read(size));
+            size_t position = reader.position();
+            bin_assert(reader.read(count));
+            for (size_t i = 0; i != count; i++) {
+                auto& [key, item] = value.items.emplace_back();
+                bin_assert(read_value_of(key, value.keyType));
+                bin_assert(read_value_of(item, value.valueType));
+            }
+            bin_assert(reader.position() == position + size);
+            return true;
+        }
+        
         template<typename T>
-        bool process_value_visit(T const& map) noexcept {
+        bool read_value_visit(T& value) noexcept {
+            bin_assert(reader.read(value.value));
             return true;
-        }
-
-        bool process_value(Value const& value) noexcept {
-            return std::visit([this](auto&& value) -> bool {
-                return process_value_visit(value);
-            }, value);
         }
 #undef bin_assert
     };
 
-    bool binary_read(std::string_view data, std::vector<Node>& result, std::string& error) noexcept {
-        ReadBinaryImpl reader {
-            { data.data(), data.data(), data.data() + data.size() }, result, error
-        };
-        return reader.process();
+    void Bin::read_binary(char const* data, size_t size) {
+        BinBinaryReader reader = { *this, { data, data, data + size } };
+        if (!reader.process()) {
+            throw std::runtime_error(std::move(reader.error));
+        }
     }
 }

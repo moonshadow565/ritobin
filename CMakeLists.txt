@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(ritobin STATIC
+    src/ritobin/bin.cpp
     src/ritobin/bin.hpp
     src/ritobin/binary_read.cpp
     src/ritobin/binary_write.cpp
@@ -18,7 +19,6 @@ add_library(ritobin STATIC
     src/ritobin/unhash.cpp
 )
 target_include_directories(ritobin PUBLIC src/)
-
 
 add_executable(ritobin2txt src/ritobin2txt.cpp)
 target_link_libraries(ritobin2txt PRIVATE ritobin)

@@ -1,16 +1,23 @@
-#include <sstream>
-#include <stack>
-#include <vector>
+#include <stdexcept>
+#include <charconv>
 #include "bin.hpp"
 
 namespace ritobin {
-    struct WordInserter {
+    struct TextWriter {
         std::vector<char>& buffer_;
-        int ident_ = {};
+        size_t ident_size_ = 2;
+        size_t ident_ = {};
+
+        inline void ident_inc() noexcept {
+            ident_ += ident_size_;
+        }
+
+        inline void ident_dec() noexcept {
+            ident_ -= ident_size_;
+        }
+
         void pad() {
-            for (int i = 0; i < ident_; i++) {
-                write_raw("  ");
-            }
+            buffer_.insert(buffer_.end(), ident_, ' ');
         }
 
         void write_raw(std::string const& str) noexcept {
@@ -29,13 +36,11 @@ namespace ritobin {
         template<typename T>
         void write(T value) noexcept {
             static_assert(std::is_arithmetic_v<T>);
-            if constexpr (sizeof(T) < 4 && std::is_unsigned_v<T>) {
-                write_raw(std::to_string(uint32_t(value)));
-            } else if constexpr (sizeof(T) < 4 && std::is_signed_v<T>) {
-                write_raw(std::to_string(int32_t(value)));
-            } else {
-                write_raw(std::to_string(value));
-            }
+            char buffer[64] = {};
+            auto [ptr, ec] = std::to_chars(buffer, buffer + sizeof(buffer), value);
+            buffer_.insert(buffer_.end(), buffer, ptr);
+            // FIXME: this only works on msvc for now
+            // alternatively use: https://github.com/ulfjack/ryu
         }
 
         template<typename T, size_t SIZE>
@@ -52,14 +57,14 @@ namespace ritobin {
         }
 
         void write(std::array<float, 16> const& value) noexcept {
-            ident_++;
+            ident_inc();
             write_raw("{\n");
             for (size_t i = 0; i < 16; i++) {
                 write(value[i]);
                 if (i % 4 == 3) {
                     write_raw("\n");
                     if (i == 15) {
-                        ident_--;
+                        ident_dec();
                     }
                     pad();
                 } else {
@@ -78,42 +83,17 @@ namespace ritobin {
         }
     
         void write(Type type) noexcept {
-            switch (type) {
-            case Type::NONE: write_raw("none"); break;
-            case Type::BOOL: write_raw("bool"); break;
-            case Type::I8: write_raw("i8"); break;
-            case Type::U8: write_raw("u8"); break;
-            case Type::I16: write_raw("i16"); break;
-            case Type::U16: write_raw("u16"); break;
-            case Type::I32: write_raw("i32"); break;
-            case Type::U32: write_raw("u32"); break;
-            case Type::I64: write_raw("i64"); break;
-            case Type::U64: write_raw("u64"); break;
-            case Type::F32: write_raw("f32"); break;
-            case Type::VEC2: write_raw("vec2"); break;
-            case Type::VEC3: write_raw("vec3"); break;
-            case Type::VEC4: write_raw("vec4"); break;
-            case Type::MTX44: write_raw("mtx44"); break;
-            case Type::RGBA: write_raw("rgba"); break;
-            case Type::STRING: write_raw("string"); break;
-            case Type::HASH: write_raw("hash"); break;
-            case Type::LIST: write_raw("list"); break;
-            case Type::POINTER: write_raw("pointer"); break;
-            case Type::EMBED: write_raw("embed"); break;
-            case Type::LINK: write_raw("link"); break;
-            case Type::OPTION: write_raw("option"); break;
-            case Type::MAP: write_raw("map"); break;
-            case Type::FLAG: write_raw("flag"); break;
-            }
+            write_raw(ValueHelper::to_type_name(type));
         }
 
-        void write(std::string const& str) noexcept {
+        void write(std::string_view str) noexcept {
             write_raw("\"");
             write_raw(str);
             write_raw("\"");
         }
 
-        void write_hash(uint32_t hex) noexcept {
+
+        void write_hex(uint32_t hex) noexcept {
             constexpr char digits[] = "0123456789abcdef";
             char result[10] = { '0', 'x' };
             for (size_t i = 9; i > 1; i--) {
@@ -123,126 +103,142 @@ namespace ritobin {
             write_raw(std::string_view{ result, sizeof(result) });
         }
 
-        void write(StringHash const& value) noexcept {
-            if (value.unhashed.empty()) {
-                write_hash(value.value);
+        void write_name(FNV1a const& value) noexcept {
+            if (!value.str().empty()) {
+                write_raw(value.str());
             } else {
-                write(value.unhashed);
+                write_hex(value.hash());
             }
         }
 
-        void write(NameHash const& value) noexcept {
-            if (value.unhashed.empty()) {
-                write_hash(value.value);
+        void write_string(FNV1a const& value) noexcept {
+            if (!value.str().empty()) {
+                write(value.str());
             } else {
-                write_raw(value.unhashed);
+                write_hex(value.hash());
             }
         }
     };
 
-    struct WriteTextImpl  {
-        std::vector<Node> const& nodes_;
-        std::string& error_;
-        WordInserter word_;
+    struct BinTextWriter {
+        Bin const& bin;
+        TextWriter writer;
+        std::string error;
 
         bool process() noexcept {
-            error_.clear();
-            word_.buffer_.clear();
-            word_.ident_ = 0;
-            word_.write_raw("#PROP_text\n");
-            return handle_nodes();
-        }
-    private:
-        bool handle_nodes() noexcept {
-            for (auto const& node : nodes_) {
-                std::visit([this](auto&& node) -> void {
-                    handle_node_visit(std::forward<decltype(node)>(node));
-                }, node);
-            }
-            word_.write_raw("\n");
+            error.clear();
+            writer.buffer_.clear();
+            writer.write_raw("#PROP_text\n");
+            write_sections();
             return true;
         }
-
-        void handle_node_visit(Section const& section) noexcept {
-            auto const& [name, value] = section;
-            word_.write_raw("\n");
-            word_.pad();
-            word_.write_raw(name);
-            word_.write_raw(": ");
-            write_type(value);
-            word_.write_raw(" = ");
-            write_value(value);
-        }
-
-        void handle_node_visit(Item const& item) noexcept {
-            auto const& [index, value] = item;
-            word_.write_raw("\n");
-            word_.pad();
-            write_value(value);
-        }
-
-        void handle_node_visit(Field const& field) noexcept {
-            auto const& [key, value] = field;
-            word_.write_raw("\n");
-            word_.pad();
-            word_.write(key);
-            word_.write_raw(": ");
-            write_type(value);
-            word_.write_raw(" = ");
-            write_value(value);
-        }
-
-        void handle_node_visit(Pair const& pair) noexcept {
-            auto const& [key, value] = pair;
-            word_.write_raw("\n");
-            word_.pad();
-            write_value(key);
-            word_.write_raw(" = ");
-            write_value(value);
-        }
-
-        void handle_node_visit(NestedEnd const& end) noexcept {
-            auto const [type, count] = end;
-            word_.ident_--;
-            if (count > 0) {
-                word_.write_raw("\n");
-                word_.pad();
+    private:
+        void write_sections() noexcept {
+            for (auto const& section : bin.sections) {
+                write_section(section);
             }
-            word_.write_raw("}");
         }
 
+        void write_section(std::pair<std::string_view,Value> const& section) {
+            auto const& [name, value] = section;
+            writer.write_raw(name);
+            writer.write_raw(": ");
+            write_type(value);
+            writer.write_raw(" = ");
+            write_value(value);
+            writer.write_raw("\n");
+        }
 
+        void write_items(ElementList const& items) noexcept {
+            if (items.empty()) {
+                writer.write_raw("{}");
+                return;
+            }
+
+            writer.write_raw("{\n");
+            writer.ident_inc();
+            for (auto const& [value] : items) {
+                writer.pad();
+                write_value(value);
+                writer.write_raw("\n");
+            }
+            writer.ident_dec();
+            writer.pad();
+            writer.write_raw("}");
+        }
+
+        void write_items(PairList const& items) noexcept {
+            if (items.empty()) {
+                writer.write_raw("{}");
+                return;
+            }
+
+            writer.write_raw("{\n");
+            writer.ident_inc();
+            for (auto const& [key, value] : items) {
+                writer.pad();
+                write_value(key);
+                writer.write_raw(" = ");
+                write_value(value);
+                writer.write_raw("\n");
+            }
+            writer.ident_dec();
+            writer.pad();
+            writer.write_raw("}");
+        }
+
+        void write_items(FieldList const& items) noexcept {
+            if (items.empty()) {
+                writer.write_raw("{}");
+                return;
+            }
+
+            writer.write_raw("{\n");
+            writer.ident_inc();
+            for (auto const& [key, value] : items) {
+                writer.pad();
+                writer.write_name(key);
+                writer.write_raw(": ");
+                write_type(value);
+                writer.write_raw(" = ");
+                write_value(value);
+                writer.write_raw("\n");
+            }
+            writer.ident_dec();
+            writer.pad();
+            writer.write_raw("}");
+        }
 
         void write_type_visit(List const& value) noexcept {
-            word_.write(value.type);
-            word_.write_raw("[");
-            word_.write(value.valueType);
-            word_.write_raw("]");
+            writer.write(value.type);
+            writer.write_raw("[");
+            writer.write(value.valueType);
+            writer.write_raw("]");
         }
 
         void write_type_visit(Option const& value) noexcept {
-            word_.write(value.type);
-            word_.write_raw("[");
-            word_.write(value.valueType);
-            word_.write_raw("]");
+            writer.write(value.type);
+            writer.write_raw("[");
+            writer.write(value.valueType);
+            writer.write_raw("]");
         }
 
         void write_type_visit(Map const& value) noexcept {
-            word_.write(value.type);
-            word_.write_raw("[");
-            word_.write(value.keyType);
-            word_.write_raw(",");
-            word_.write(value.valueType);
-            word_.write_raw("]");
+            writer.write(value.type);
+            writer.write_raw("[");
+            writer.write(value.keyType);
+            writer.write_raw(",");
+            writer.write(value.valueType);
+            writer.write_raw("]");
         }
 
         void write_type_visit(None const& value) noexcept {
-            word_.write(value.type);
+            writer.write(value.type);
         }
 
         template<typename T>
         void write_type_visit(T const& value) noexcept {
-            word_.write(value.type);
+            writer.write(value.type);
         }
 
         void write_type(Value const& value) noexcept {
@@ -250,57 +246,54 @@ namespace ritobin {
                 write_type_visit(value);
             }, value);
         }
-        
+    
         void write_value_visit(Pointer const& value) noexcept {
-            if (value.value.value == 0 && value.value.unhashed.empty()) {
-                word_.write_raw("null");
-            } else {
-                word_.write(value.value);
-                word_.write_raw(" {");
-                word_.ident_++;
+            if (value.name.str().empty() && value.name.hash() == 0) {
+                writer.write_raw("null");
+                return;
             }
+            writer.write_name(value.name);
+            writer.write_raw(" ");
+            write_items(value.items);
         }
 
         void write_value_visit(Embed const& value) noexcept {
-            word_.write(value.value);
-            word_.write_raw(" {");
-            word_.ident_++;
+            writer.write_name(value.name);
+            writer.write_raw(" ");
+            write_items(value.items);
         }
 
-        void write_value_visit(List const&) noexcept {
-            word_.write_raw("{");
-            word_.ident_++;
+        void write_value_visit(List const& value) noexcept {
+            write_items(value.items);
         }
 
-        void write_value_visit(Option const&) noexcept {
-            word_.write_raw("{");
-            word_.ident_++;
+        void write_value_visit(Option const& value) noexcept {
+            write_items(value.items);
         }
 
-        void write_value_visit(Map const&) noexcept {
-            word_.write_raw("{");
-            word_.ident_++;
+        void write_value_visit(Map const& value) noexcept {
+            write_items(value.items);
         }
 
         void write_value_visit(Hash const& value) noexcept {
-            word_.write(value.value);
+            writer.write_string(value.value);
         }
 
         void write_value_visit(Link const& value) noexcept {
-            word_.write(value.value);
+            writer.write_string(value.value);
         }
 
         void write_value_visit(String const& value) noexcept {
-            word_.write(value.value);
+            writer.write_string(value.value);
         }
 
         void write_value_visit(None const&) noexcept {
-            word_.write_raw("null");
+            writer.write_raw("null");
         }
 
         template<typename T>
         void write_value_visit(T const& value) noexcept {
-            word_.write(value.value);
+            writer.write(value.value);
         }
 
         void write_value(Value const& value) noexcept {
@@ -310,10 +303,10 @@ namespace ritobin {
         }
     };
 
-    bool text_write(std::vector<Node> const& nodes, std::vector<char>& result, std::string& error) noexcept {
-        WriteTextImpl writer = {
-            nodes, error, { result }
-        };
-        return writer.process();
+    void Bin::write_text(std::vector<char>& out, size_t ident_size) const {
+        BinTextWriter writer = { *this, { out, ident_size } };
+        if (!writer.process()) {
+            throw std::runtime_error(std::move(writer.error));
+        }
     }
 }

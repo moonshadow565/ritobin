@@ -1,20 +1,14 @@
-#include <stack>
-#include <vector>
-#include <algorithm>
+#include <stdexcept>
 #include "bin.hpp"
 
-namespace ritobin {
-    struct ByteWriter {
-        std::vector<char>& data;
 
-        template<typename T>
-        bool write_at(size_t value, size_t pos) noexcept {
-            static_assert(std::is_arithmetic_v<T>);
-            auto const tmp = static_cast<T>(value);
-            if (pos + sizeof(T) > position()) {
-                return false;
-            }
-            memcpy(data.data() + pos, &tmp, sizeof(T));
+namespace ritobin {
+    struct BinaryWriter {
+        std::vector<char>& buffer_;
+
+        bool write_at(size_t offset, size_t value) noexcept {
+            auto const tmp = static_cast<uint32_t>(value);
+            memcpy(buffer_.data() + offset, &tmp, sizeof(uint32_t));
             return true;
         }
 
@@ -23,16 +17,16 @@ namespace ritobin {
             static_assert(std::is_arithmetic_v<T>);
             char buffer[sizeof(T) * S];
             memcpy(buffer, value.data(), sizeof(T) * S);
-            data.insert(data.end(), buffer, buffer + sizeof(T) * S);
+            buffer_.insert(buffer_.end(), buffer, buffer + sizeof(T) * S);
         }
 
-        template<typename T>
-        void write(std::vector<T> const& value) noexcept {
-            static_assert(std::is_arithmetic_v<T>);
-            auto const pos = position();
-            auto const size = sizeof(T) * value.size();
-            data.insert(data.end(), size, '\x00');
-            memcpy(data.data() + pos, value.data(), size);
+        void write(std::vector<uint32_t> const& value, size_t offset) noexcept {
+            auto const size = sizeof(uint32_t) * value.size();
+            memcpy(buffer_.data() + offset, value.data(), size);
+        }
+
+        void skip(size_t size) noexcept {
+            buffer_.insert(buffer_.end(), size, '\x00');
         }
 
         template<typename T>
@@ -40,7 +34,7 @@ namespace ritobin {
             static_assert(std::is_arithmetic_v<T>);
             char buffer[sizeof(value)];
             memcpy(buffer, &value, sizeof(value));
-            data.insert(data.end(), buffer, buffer + sizeof(buffer));
+            buffer_.insert(buffer_.end(), buffer, buffer + sizeof(buffer));
         }
 
         void write(bool value) noexcept {
@@ -48,336 +42,236 @@ namespace ritobin {
         }
 
         void write(Type type) noexcept {
-            write(static_cast<uint8_t>(type));
+            unsigned int raw = static_cast<unsigned int>(type);
+            if (raw >= 18) {
+                raw -= 18;
+                raw |= 0x80;
+            }
+            write(static_cast<uint8_t>(raw));
         }
 
         void write(std::string const& value) {
             write(static_cast<uint16_t>(value.size()));
-            data.insert(data.end(), value.data(), value.data() + value.size());
+            buffer_.insert(buffer_.end(), value.data(), value.data() + value.size());
         }
 
-        void write(NameHash const& value) {
+        void write(FNV1a const& value) {
             write(value.hash());
         }
 
-        void write(StringHash const& value) {
-            write(value.hash());
-        }
-    
         inline size_t position() const noexcept {
-            return data.size();
+            return buffer_.size();
         }
     };
 
-
-    struct WriteBinaryImpl {
-        std::vector<Node> const & nodes_;
-        std::vector<char>& result_;
-        std::string& error_;
-
-
-        std::vector<std::string> linked_ = {};
-        std::vector<uint32_t> entries_ = {};
-        std::vector<char> bufferEntries_ = {};
-        ByteWriter writerEntries_ = { bufferEntries_ };
-        ByteWriter writerResult_ = { result_ };
-        std::stack<size_t> offsets_ = {};
-
-        enum class State {
-            SectionType,
-            SectionVersion,
-            SectionLinkedStart,
-            SectionLinked,
-            SectionEntriesStart,
-            SectionEntries,
-            SectionEnd,
-        } state = {};
-
+    struct BinBinaryWriter {
+        Bin const& bin;
+        BinaryWriter writer;
+        std::string error;
 
         bool process() noexcept {
-            result_.clear();
-            error_.clear();
-            if (!process_sections()) {
-                error_.append("Failed to read node!");
+            error.clear();
+            writer.buffer_.clear();
+            if (!write_header()) {
+                error.append("Failed to write header");
+                return false;
+            }
+            if (!write_entries()) {
+                error.append("Failed to write entries");
                 return false;
             }
             return true;
         }
     private:
-        inline bool fail_fast() noexcept {
-            return false;
-        }
+        // NOTE: change this macro to include full stack messages
 #define bin_assert(...) do { if(!(__VA_ARGS__)) { return fail_fast(); } } while(false)
+        inline constexpr bool fail_fast() const noexcept { return false; }
 
-        bool process_section_end() noexcept {
-            bin_assert(state == State::SectionEnd);
-            bin_assert(offsets_.empty());
-            writerResult_.write(static_cast<uint32_t>(linked_.size()));
-            for (auto const& linked : linked_) {
-                writerResult_.write(linked);
+        bool write_header() noexcept {
+            auto type_section = bin.sections.find("type");
+            bin_assert(type_section != bin.sections.end());
+            auto type = std::get_if<String>(&type_section->second);
+            bin_assert(type);
+            bin_assert(type->value == "PROP" || type->value == "PTCH");
+            if (type->value == "PTCH") {
+                writer.write(std::array{ 'P', 'T', 'C', 'H' });
+                writer.write(uint32_t{ 1 });
+                writer.write(uint32_t{ 0 });
             }
-            writerResult_.write(static_cast<uint32_t>(entries_.size()));
-            writerResult_.write(entries_);
-            writerResult_.write(bufferEntries_);
-            return true;
-        }
+            writer.write(std::array{ 'P', 'R', 'O', 'P' });
 
-        bool process_sections() noexcept {
-            for (auto const& node : nodes_) {
-                bin_assert(state != State::SectionEnd);
-                switch (state) {
-                case State::SectionType:
-                    bin_assert(process_section_type(node));
-                    break;
-                case State::SectionVersion:
-                    bin_assert(process_section_version(node));
-                    break;
-                case State::SectionLinkedStart:
-                    bin_assert(process_section_linked_start(node));
-                    break;
-                case State::SectionLinked:
-                    bin_assert(process_section_linked(node));
-                    break;
-                case State::SectionEntriesStart:
-                    bin_assert(process_section_entries_start(node));
-                    break;
-                case State::SectionEntries:
-                    bin_assert(process_section_entries(node));
-                    break;
-                default: break;
-                }
-            }
-            bin_assert(process_section_end());
-            return true;
-        }
 
-        bool process_section_type(Node const& node) noexcept {
-            auto section = std::get_if<Section>(&node);
-            bin_assert(section);
-            bin_assert(section->name == "type");
-            auto value = std::get_if<String>(&section->value);
-            bin_assert(value);
-            bin_assert(value->value == "PROP" || value->value == "PTCH");
-            if (value->value == "PTCH") {
-                writerResult_.write(std::array{ 'P', 'T', 'C', 'H' });
-                writerResult_.write(uint32_t{ 1 });
-                writerResult_.write(uint32_t{ 0 });
-            }
-            writerResult_.write(std::array{ 'P', 'R', 'O', 'P' });
-            state = State::SectionVersion;
-            return true;
-        }
+            auto version_section = bin.sections.find("version");
+            bin_assert(version_section != bin.sections.end());
+            auto version = std::get_if<U32>(&version_section->second);
+            bin_assert(version);
+            writer.write(uint32_t{ version->value });
 
-        bool process_section_version(Node const& node) noexcept {
-            auto section = std::get_if<Section>(&node);
-            bin_assert(section);
-            bin_assert(section->name == "version");
-            auto value = std::get_if<U32>(&section->value);
-            bin_assert(value);
-            writerResult_.write(value->value);
-            state = State::SectionLinkedStart;
-            return true;
-        }
-
-        bool process_section_linked_start(Node const& node) noexcept {
-            auto section = std::get_if<Section>(&node);
-            bin_assert(section);
-            bin_assert(section->name == "linked");
-            auto value = std::get_if<List>(&section->value);
-            bin_assert(value);
-            bin_assert(value->valueType == Type::STRING);
-            state = State::SectionLinked;
-            return true;
-        }
-
-        bool process_section_linked(Node const& node) noexcept {
-            if (std::holds_alternative<NestedEnd>(node)) {
-                auto const& end = std::get<NestedEnd>(node);
-                bin_assert(end.count == linked_.size());
-                bin_assert(end.type == Type::LIST);
-                state = State::SectionEntriesStart;
+            if (version->value < 2) {
                 return true;
             }
 
-            auto item = std::get_if<Item>(&node);
-            bin_assert(item);
-            auto value = std::get_if<String>(&item->value);
-            bin_assert(value);
-            linked_.push_back(value->value);
+            auto linked_section = bin.sections.find("linked");
+            bin_assert(linked_section != bin.sections.end());
+            auto linked = std::get_if<List>(&linked_section->second);
+            bin_assert(linked);
+            bin_assert(linked->valueType == Type::STRING);
+            writer.write(static_cast<uint32_t>(linked->items.size()));
+            for (auto const& [item] : linked->items) {
+                auto link = std::get_if<String>(&item);
+                bin_assert(link);
+                writer.write(link->value);
+            }
+            return true;
+        }
+    
+        bool write_entries() noexcept {
+            auto entries_section = bin.sections.find("entries");
+            bin_assert(entries_section != bin.sections.end());
+            auto entries = std::get_if<Map>(&entries_section->second);
+            bin_assert(entries);
+            bin_assert(entries->keyType == Type::HASH);
+            bin_assert(entries->valueType == Type::EMBED);
+
+            writer.write(static_cast<uint32_t>(entries->items.size()));
+
+            std::vector<uint32_t> entryNameHashes;
+            size_t entryNameHashes_offset = writer.position();
+            writer.skip(sizeof(uint32_t) * entries->items.size());
+            entryNameHashes.reserve(entries->items.size());
+
+            for (auto const& [entryKey, entryValue] : entries->items) {
+                auto key = std::get_if<Hash>(&entryKey);
+                auto value = std::get_if<Embed>(&entryValue);
+                bin_assert(key);
+                bin_assert(value);
+                entryNameHashes.push_back(value->name.hash());
+                bin_assert(write_entry(*key, *value));
+            }
+            writer.write(entryNameHashes, entryNameHashes_offset);
             return true;
         }
 
-        bool process_section_entries_start(Node const& node) noexcept {
-            auto section = std::get_if<Section>(&node);
-            bin_assert(section);
-            bin_assert(section->name == "entries");
-            auto value = std::get_if<Map>(&section->value);
-            bin_assert(value);
-            bin_assert(value->keyType == Type::HASH);
-            bin_assert(value->valueType == Type::EMBED);
-            state = State::SectionEntries;
+        bool write_entry(Hash const& entryKey, Embed const& entryValue) noexcept {
+            size_t position = writer.position();
+            writer.write(uint32_t{});
+            writer.write(uint32_t{ entryKey.value.hash() });
+            writer.write(static_cast<uint16_t>(entryValue.items.size()));
+            for (auto const& [name, item] : entryValue.items) {
+                writer.write(name.hash());
+                writer.write(ValueHelper::to_type(item));
+                bin_assert(write_value(item));
+            }
+            writer.write_at(position, writer.position() - position - 4);
             return true;
         }
 
-        bool process_section_entries(Node const& node) noexcept {
-            if (offsets_.empty()) {
-                if (std::holds_alternative<NestedEnd>(node)) {
-                    auto const& end = std::get<NestedEnd>(node);
-                    bin_assert(end.count == entries_.size());
-                    bin_assert(end.type == Type::MAP);
-                    state = State::SectionEnd;
-                    return true;
-                }
-                auto const entry = std::get_if<Pair>(&node);
-                bin_assert(entry);
-                auto const key = std::get_if<Hash>(&entry->key);
-                auto const value = std::get_if<Embed>(&entry->value);
-                bin_assert(key && value);
-                entries_.push_back(value->value.hash());
-                offsets_.push(writerEntries_.position());
-                writerEntries_.write(uint32_t{ 0 });
-                writerEntries_.write(uint32_t{ key->value.hash() });
-                writerEntries_.write(uint16_t{ 0 });
+
+        bool write_value_visit(Embed const& value) noexcept {
+            writer.write(value.name);
+            size_t position = writer.position();
+            writer.write(uint32_t{ 0 });
+            writer.write(static_cast<uint16_t>(value.items.size()));
+            for (auto const& [name, item] : value.items) {
+                writer.write(name.hash());
+                writer.write(ValueHelper::to_type(item));
+                bin_assert(write_value(item));
+            }
+            writer.write_at(position, writer.position() - position - 4);
+            return true;
+        }
+
+        bool write_value_visit(Pointer const& value) noexcept {
+            writer.write(value.name);
+            if (value.name.hash() == 0) {
                 return true;
             }
-
-            if (offsets_.size() == 1) {
-                if (std::holds_alternative<NestedEnd>(node)) {
-                    auto const& end = std::get<NestedEnd>(node);
-                    bin_assert(end.type == Type::EMBED);
-                    auto const offset = offsets_.top();
-                    auto const position = writerEntries_.position();
-                    bin_assert(writerEntries_.write_at<uint32_t>(position - offset - 4, offset));
-                    bin_assert(writerEntries_.write_at<uint16_t>(end.count, offset + 8));
-                    offsets_.pop();
-                    return true;
-                }
-                // TODO: extra check here ?
+            size_t position = writer.position();
+            writer.write(uint32_t{ 0 });
+            writer.write(static_cast<uint16_t>(value.items.size()));
+            for (auto const& [name, item] : value.items) {
+                writer.write(name.hash());
+                writer.write(ValueHelper::to_type(item));
+                bin_assert(write_value(item));
             }
-
-            return std::visit([this](auto&& node) -> bool {
-                return handle_node_visit(std::forward<decltype(node)>(node));
-            }, node);
-        }
-
-
-        bool handle_node_visit(Item const& item) noexcept {
-            bin_assert(handle_value(item.value));
+            writer.write_at(position, writer.position() - position - 4);
             return true;
         }
 
-        bool handle_node_visit(Field const& field) noexcept {
-            writerEntries_.write(field.name.hash());
-            writerEntries_.write(Value_type(field.value));
-            bin_assert(handle_value(field.value));
-            return true;
-        }
-
-        bool handle_node_visit(Pair const& pair) noexcept {
-            bin_assert(handle_value(pair.key));
-            bin_assert(handle_value(pair.value));
-            return true;
-        }
-
-        bool handle_node_visit(NestedEnd const& end) noexcept {
-            auto const offset = offsets_.top();
-            auto const position = writerEntries_.position();
-            switch (end.type) {
-            case Type::POINTER:
-            case Type::EMBED:
-                bin_assert(writerEntries_.write_at<uint32_t>(position - offset - 4, offset));
-                bin_assert(writerEntries_.write_at<uint16_t>(end.count, offset + 4));
-                break;
-            case Type::MAP:
-            case Type::LIST:
-                bin_assert(writerEntries_.write_at<uint32_t>(position - offset - 4, offset));
-                bin_assert(writerEntries_.write_at<uint32_t>(end.count, offset + 4));
-                break;
-            case Type::OPTION:
-                bin_assert(end.count < 2);
-                bin_assert(writerEntries_.write_at<uint8_t>(end.count, offset));
-                break;
-            default:
-                bin_assert(!"Invalid nest end type!");
-                break;
+        bool write_value_visit(List const& value) noexcept {
+            bin_assert(value.valueType != Type::MAP);
+            bin_assert(value.valueType != Type::LIST);
+            bin_assert(value.valueType != Type::OPTION);
+            writer.write(value.valueType);
+            size_t position = writer.position();
+            writer.write(uint32_t{ 0 });
+            writer.write(static_cast<uint32_t>(value.items.size()));
+            for (auto const& [item] : value.items) {
+                bin_assert(write_value(item, value.valueType));
             }
-            offsets_.pop();
+            writer.write_at(position, writer.position() - position - 4);
             return true;
         }
 
-        bool handle_node_visit(Section const&) noexcept {
-            bin_assert(!"Section not allowed here!");
+        bool write_value_visit(Map const& value) noexcept {
+            bin_assert(value.keyType <= Type::HASH);
+            bin_assert(value.valueType != Type::MAP);
+            bin_assert(value.valueType != Type::LIST);
+            bin_assert(value.valueType != Type::OPTION);
+            writer.write(value.keyType);
+            writer.write(value.valueType);
+            size_t position = writer.position();
+            writer.write(uint32_t{ 0 });
+            writer.write(static_cast<uint32_t>(value.items.size()));
+            for (auto const& [key, item] : value.items) {
+                bin_assert(write_value(key, value.keyType));
+                bin_assert(write_value(item, value.valueType));
+            }
+            writer.write_at(position, writer.position() - position - 4);
             return true;
         }
 
-
-
-        bool handle_value(Value const& value) noexcept {
-            return std::visit([this](auto&& value) {
-                return handle_value_visit(std::forward<decltype(value)>(value));
-            }, value);
+        bool write_value_visit(Option const& value) noexcept {
+            bin_assert(value.valueType != Type::MAP);
+            bin_assert(value.valueType != Type::LIST);
+            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(value.items.size() <= 1);
+            writer.write(value.valueType);
+            writer.write(static_cast<uint8_t>(value.items.size()));
+            for (auto const& [item] : value.items) {
+                bin_assert(write_value(item, value.valueType));
+            }
+            return true;
         }
 
-        bool handle_value_visit(None const&) noexcept {
+        bool write_value_visit(None const& value) noexcept {
             return true;
         }
 
         template<typename T>
-        bool handle_value_visit(T const& value) noexcept {
-            writerEntries_.write(value.value);
+        bool write_value_visit(T const& value) noexcept {
+            writer.write(value.value);
             return true;
         }
 
-        bool handle_value_visit(Map const& value) noexcept {
-            writerEntries_.write(value.keyType);
-            writerEntries_.write(value.valueType);
-            offsets_.push(writerEntries_.position());
-            writerEntries_.write(uint32_t{ 0 });
-            writerEntries_.write(uint32_t{ 0 });
-            return true;
+        bool write_value(Value const& value) noexcept {
+            return std::visit([this](auto const& value) {
+                return write_value_visit(value);
+            }, value);
         }
 
-        bool handle_value_visit(List const& value) noexcept {
-            writerEntries_.write(value.valueType);
-            offsets_.push(writerEntries_.position());
-            writerEntries_.write(uint32_t{ 0 });
-            writerEntries_.write(uint32_t{ 0 });
-            return true;
+        bool write_value(Value const& value, Type type) noexcept {
+            return std::visit([this, type](auto const& value) {
+                bin_assert(value.type == type);
+                return write_value_visit(value);
+                }, value);
         }
-
-        bool handle_value_visit(Option const& value) noexcept {
-            writerEntries_.write(value.valueType);
-            offsets_.push(writerEntries_.position());
-            writerEntries_.write(uint8_t{ 0 });
-            return true;
-        }
-
-        bool handle_value_visit(Pointer const& value) noexcept {
-            if (value.value.value == 0 && value.value.unhashed.empty()) {
-                writerEntries_.write(uint32_t{ 0 });
-            } else {
-                writerEntries_.write(value.value.hash());
-                offsets_.push(writerEntries_.position());
-                writerEntries_.write(uint32_t{ 0 });
-                writerEntries_.write(uint16_t{ 0 });
-            }
-            return true;
-        }
-
-        bool handle_value_visit(Embed const& value) noexcept {
-            writerEntries_.write(value.value.hash());
-            offsets_.push(writerEntries_.position());
-            writerEntries_.write(uint32_t{ 0 });
-            writerEntries_.write(uint16_t{ 0 });
-            return true;
-        }
-#undef bin_assert
     };
 
-    bool binary_write(NodeList const& nodes, std::vector<char>& result, std::string& error) noexcept {
-        WriteBinaryImpl writer = {
-            nodes, result, error
-        };
-        return writer.process();
+    void Bin::write_binary(std::vector<char>& out) const {
+        BinBinaryWriter writer = { *this, { out } };
+        if (!writer.process()) {
+            throw std::runtime_error(std::move(writer.error));
+        }
     }
 }

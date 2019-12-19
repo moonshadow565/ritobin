@@ -67,25 +67,25 @@ namespace ritobin {
     struct BinBinaryWriter {
         Bin const& bin;
         BinaryWriter writer;
-        std::string error;
+        std::vector<std::string> error;
+
+        #define bin_assert(...) do { \
+            if(!(__VA_ARGS__)) { \
+                return fail_msg(#__VA_ARGS__ "\n"); \
+            } } while(false)
 
         bool process() noexcept {
             error.clear();
             writer.buffer_.clear();
-            if (!write_header()) {
-                error.append("Failed to write header");
-                return false;
-            }
-            if (!write_entries()) {
-                error.append("Failed to write entries");
-                return false;
-            }
+            bin_assert(write_header());
+            bin_assert(write_entries());
             return true;
         }
     private:
-        // NOTE: change this macro to include full stack messages
-#define bin_assert(...) do { if(!(__VA_ARGS__)) { return fail_fast(); } } while(false)
-        inline constexpr bool fail_fast() const noexcept { return false; }
+        bool fail_msg(char const* msg) noexcept {
+            error.emplace_back(msg);
+            return false;
+        }
 
         bool write_header() noexcept {
             auto type_section = bin.sections.find("type");
@@ -166,7 +166,6 @@ namespace ritobin {
             return true;
         }
 
-
         bool write_value_visit(Embed const& value) noexcept {
             writer.write(value.name);
             size_t position = writer.position();
@@ -244,7 +243,7 @@ namespace ritobin {
             return true;
         }
 
-        bool write_value_visit(None const& value) noexcept {
+        bool write_value_visit(None const&) noexcept {
             return true;
         }
 
@@ -269,9 +268,13 @@ namespace ritobin {
     };
 
     void Bin::write_binary(std::vector<char>& out) const {
-        BinBinaryWriter writer = { *this, { out } };
+        BinBinaryWriter writer = { *this, { out }, {} };
         if (!writer.process()) {
-            throw std::runtime_error(std::move(writer.error));
+            std::string error;
+            for(auto e = writer.error.crbegin(); e != writer.error.crend(); e++) {
+                error.append(*e);
+            }
+            throw std::runtime_error(std::move(error));
         }
     }
 }

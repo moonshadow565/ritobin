@@ -147,10 +147,8 @@ namespace ritobin {
     struct BinTextWriter {
         Bin const& bin;
         TextWriter writer;
-        std::string error;
 
         bool process() noexcept {
-            error.clear();
             writer.buffer_.clear();
             writer.write_raw("#PROP_text\n");
             write_sections();
@@ -329,8 +327,6 @@ namespace ritobin {
 
     void Bin::write_text(std::vector<char>& out, size_t ident_size) const {
         BinTextWriter writer = { *this, { out, ident_size } };
-        if (!writer.process()) {
-            throw std::runtime_error(std::move(writer.error));
-        }
+        writer.process();
     }
 }

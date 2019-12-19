@@ -88,22 +88,23 @@ namespace ritobin {
     struct BinBinaryReader {
         Bin& bin;
         BinaryReader reader;
-        std::string error;
+        std::vector<std::pair<std::string, char const*>> error;
+
+        #define bin_assert(...) do { \
+            if(auto start = reader.cur_; !(__VA_ARGS__)) { \
+                return fail_msg(#__VA_ARGS__, start); \
+            } } while(false)
 
         bool process() noexcept {
             bin.sections.clear();
-            error.clear();
-            if (!read_sections()) {
-                error.append("Failed to read @ " + std::to_string(reader.position()));
-                return false;
-            }
+            bin_assert(read_sections());
             return true;
         }
-
     private:
-        // NOTE: change this macro to include full stack messages
-#define bin_assert(...) do { if(!(__VA_ARGS__)) { return fail_fast(); } } while(false)
-        inline constexpr bool fail_fast() const noexcept { return false; }
+        bool fail_msg(char const* msg, char const* pos) noexcept {
+            error.emplace_back(msg, pos);
+            return false;
+        }
 
         bool read_sections() noexcept {
             std::array<char, 4> magic = {};
@@ -128,7 +129,7 @@ namespace ritobin {
         }
 
         bool read_linked(bool hasLinks) noexcept {
-            List linkedList = { Type::STRING };
+            List linkedList = { Type::STRING, {} };
             if (hasLinks) {
                 uint32_t linkedFilesCount = {};
                 bin_assert(reader.read(linkedFilesCount));
@@ -147,10 +148,10 @@ namespace ritobin {
             std::vector<uint32_t> entryNameHashes;
             bin_assert(reader.read(entryCount));
             bin_assert(reader.read(entryNameHashes, entryCount));
-            Map entriesMap = { Type::HASH,  Type::EMBED };
+            Map entriesMap = { Type::HASH,  Type::EMBED, {} };
             for (uint32_t entryNameHash : entryNameHashes) {
                 Hash entryKeyHash = {};
-                Embed entry = { { entryNameHash } };
+                Embed entry = { { entryNameHash }, {} };
                 bin_assert(read_entry(entryKeyHash, entry));
                 entriesMap.items.emplace_back(Pair{ std::move(entryKeyHash), std::move(entry) });
             }
@@ -289,9 +290,16 @@ namespace ritobin {
     };
 
     void Bin::read_binary(char const* data, size_t size) {
-        BinBinaryReader reader = { *this, { data, data, data + size } };
+        BinBinaryReader reader = { *this, { data, data, data + size }, {} };
         if (!reader.process()) {
-            throw std::runtime_error(std::move(reader.error));
+            std::string error;
+            for(auto e = reader.error.crbegin(); e != reader.error.crend(); e++) {
+                error.append(e->first);
+                error.append(" @ ");
+                error.append(std::to_string(data - e->second));
+                error.append("\n");
+            }
+            throw std::runtime_error(std::move(error));
         }
     }
 }

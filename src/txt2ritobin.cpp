@@ -23,10 +23,10 @@ int main(int argc, char** argv) {
         bin.write_binary_file(outfile.string());
         return 0;
     }  catch (std::runtime_error const& err) {
-        puts("Error: ");
-        puts(err.what());
+        fputs("Error: ", stderr);
+        fputs(err.what(), stderr);
         if (argc < 3) {
-            puts("Press enter to continue...");
+            fputs("Press enter to continue...", stderr);
             int c = getc(stdin);
         }
         return -1;

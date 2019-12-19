@@ -9,7 +9,6 @@ namespace ritobin {
         char const* cur_ = nullptr;
         char const* const cap_ = nullptr;
 
-
         template<char...C>
         static inline constexpr bool one_of(char c) noexcept {
             return ((c == C) || ...);
@@ -20,13 +19,12 @@ namespace ritobin {
             return c >= F && c <= T;
         }
 
-
         inline constexpr bool is_eof() const noexcept {
             return cur_ == cap_;
         }
 
         inline constexpr size_t position() const noexcept {
-            return cur_ - beg_;
+            return static_cast<size_t>(cur_ - beg_);
         }
 
         constexpr bool next_newline() noexcept {
@@ -51,7 +49,6 @@ namespace ritobin {
             return newline;
         }
 
-
         constexpr std::string_view read_word() noexcept {
             while (!is_eof() && one_of<' ', '\t', '\r'>(*cur_)) {
                 cur_++;
@@ -67,9 +64,9 @@ namespace ritobin {
         }
 
         constexpr bool read_nested_begin(bool& end) noexcept {
-            if (read<'{'>()) {
+            if (read_symbol<'{'>()) {
                 next_newline();
-                end = read<'}'>();
+                end = read_symbol<'}'>();
                 return true;
             }
             return false;
@@ -80,7 +77,7 @@ namespace ritobin {
                 return true;
             }
 
-            if (read<','>()) {
+            if (read_symbol<','>()) {
                 next_newline();
                 return true;
             }
@@ -88,19 +85,19 @@ namespace ritobin {
         }
 
         constexpr bool read_nested_separator_or_end(bool& end) noexcept {
-            if (read<'}'>()) {
+            if (read_symbol<'}'>()) {
                 end = true;
                 return true;
             }
             if (read_nested_separator()) {
-                end = read<'}'>();
+                end = read_symbol<'}'>();
                 return true;
             }
             return false;
         }
 
         template<char Symbol>
-        constexpr bool read() noexcept {
+        constexpr bool read_symbol() noexcept {
             while (!is_eof() && one_of<' ', '\t', '\r'>(*cur_)) {
                 cur_++;
             }
@@ -120,7 +117,7 @@ namespace ritobin {
                 return false;
             }
             if (*cur_ != '"' && *cur_ != '\'') {
-                return false;;
+                return false;
             }
             auto const term = *cur_;
             cur_++;
@@ -173,14 +170,14 @@ namespace ritobin {
                     } else if (c == 'x') {
                         state = State::Escape_Byte_0;
                     } else {
-                        return false;;
+                        return false;
                     }
                 } else if (state == State::Escape_CariageReturn) {
                     if (c == '\n') {
                         state = State::Take;
                         result.push_back('\n');
                     } else {
-                        return false;;
+                        return false;
                     }
                 } else if (state == State::Escape_Byte_0) {
                     state = State::Escape_Byte_1;
@@ -193,7 +190,7 @@ namespace ritobin {
                     if (ec == std::errc{} && p == escaped + 2) {
                         result.push_back(static_cast<char>(value));
                     } else {
-                        return false;;
+                        return false;
                     }
                 } else if (state == State::Escape_Unicode_0) {
                     state = State::Escape_Unicode_1;
@@ -212,13 +209,13 @@ namespace ritobin {
                     if (ec == std::errc{} && p == escaped + 4) {
                         // FIXME: encode unicode
                     } else {
-                        return false;;
+                        return false;
                     }
                 } else {
                     if (c == '\\') {
                         state = State::Escape;
                     }else if (c < ' ') {
-                        return false;;
+                        return false;
                     } else if (c == term) {
                         cur_++;
                         return true;
@@ -228,9 +225,8 @@ namespace ritobin {
                 }
                 cur_++;
             }
-            return false;;
+            return false;
         }
-
 
         bool read_hash(FNV1a& value) noexcept {
             auto const word = read_word();
@@ -245,14 +241,13 @@ namespace ritobin {
             uint32_t result = 0;
             auto const [ptr, ec] = std::from_chars(beg, end, result, 16);
             if (ptr == end && ec == std::errc{}) {
-                value = { result };
+                value = FNV1a{ result };
                 return true;
             }
             return false;
         }
 
-
-        bool read_name(std::string& value) {
+        bool read_name(std::string& value) noexcept {
             auto const word = read_word();
             if (word.empty()) {
                 return false;
@@ -272,7 +267,7 @@ namespace ritobin {
             return true;
         }
 
-        bool read_hash_name(FNV1a& value) {
+        bool read_hash_name(FNV1a& value) noexcept {
             auto const backup = cur_;
             if (read_hash(value)) {
                 return true;
@@ -285,7 +280,7 @@ namespace ritobin {
             return false;
         }
 
-        bool read_hash_string(FNV1a& value) {
+        bool read_hash_string(FNV1a& value) noexcept {
             auto const backup = cur_;
             if (read_hash(value)) {
                 return true;
@@ -298,7 +293,7 @@ namespace ritobin {
             return false;
         }
 
-        bool read(bool& value) noexcept {
+        bool read_bool(bool& value) noexcept {
             auto const word = read_word();
             if (word.empty()) {
                 return false;
@@ -316,7 +311,7 @@ namespace ritobin {
             }
         }
 
-        bool read(Type& value) noexcept {
+        bool read_typename(Type& value) noexcept {
             auto const name = read_word();
             if (name.empty()) {
                 return false;
@@ -325,7 +320,7 @@ namespace ritobin {
         }
 
         template<typename T>
-        bool read(T& value) noexcept {
+        bool read_number(T& value) noexcept {
             static_assert (std::is_arithmetic_v<T>);
             auto const word = read_word();
             if (word.empty()) {
@@ -346,63 +341,63 @@ namespace ritobin {
     struct BinTextReader {
         Bin& bin;
         TextReader reader;
-        std::string error;
+        std::vector<std::pair<std::string, char const*>> error;
+
+        #define bin_assert(...) do { \
+            if(auto start = reader.cur_; !(__VA_ARGS__)) { \
+                return fail_msg(#__VA_ARGS__, start); \
+            } } while(false)
 
         bool process() noexcept {
-            bin.sections.clear();
-            error.clear();
-            if (!read_sections()) {
-                error.append("Failed to read @ " + std::to_string(reader.position()));
-                return false;
-            }
+            bin_assert(read_sections());
             return true;
         }
-
     private:
-        // NOTE: change this macro to include full stack messages
-#define bin_assert(...) do { if(!(__VA_ARGS__)) { return fail_fast(); } } while(false)
-        inline constexpr bool fail_fast() const noexcept { return false; }
+        bool fail_msg(char const* msg, char const* pos) noexcept {
+            error.emplace_back(msg, pos);
+            return false;
+        }
 
         bool read_sections() noexcept {
             reader.next_newline();
             while (!reader.is_eof()) {
-                std::string name = {};
-                Value value = {};
-                bin_assert(reader.read_name(name));
-                bin_assert(read_value_type(value));
-                bin_assert(reader.read<'='>());
-                bin_assert(read_value(value));
+                std::string section_name = {};
+                Value section_value = {};
+                bin_assert(reader.read_name(section_name));
+                bin_assert(read_value_type(section_value));
+                bin_assert(reader.read_symbol<'='>());
+                bin_assert(read_value(section_value));
                 bin_assert(reader.is_eof() || reader.read_nested_separator());
-                bin.sections.emplace(std::move(name), std::move(value));
+                bin.sections.emplace(std::move(section_name), std::move(section_value));
             }
             return true;
         }
     
-        bool read_value_type(Value& value) {
+        bool read_value_type(Value& value) noexcept {
             Type type = {};
-            bin_assert(reader.read<':'>());
-            bin_assert(reader.read(type));
+            bin_assert(reader.read_symbol<':'>());
+            bin_assert(reader.read_typename(type));
             bin_assert(type <= Type::FLAG);
 
             if (type == Type::LIST) {
                 List result = {};
-                bin_assert(reader.read <'['>());
-                bin_assert(reader.read(result.valueType));
-                bin_assert(reader.read <']'>());
+                bin_assert(reader.read_symbol<'['>());
+                bin_assert(reader.read_typename(result.valueType));
+                bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else if (type == Type::OPTION) {
                 Option result = {};
-                bin_assert(reader.read <'['>());
-                bin_assert(reader.read(result.valueType));
-                bin_assert(reader.read <']'>());
+                bin_assert(reader.read_symbol<'['>());
+                bin_assert(reader.read_typename(result.valueType));
+                bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else if (type == Type::MAP) {
                 Map result = {};
-                bin_assert(reader.read <'['>());
-                bin_assert(reader.read(result.keyType));
-                bin_assert(reader.read <','>());
-                bin_assert(reader.read(result.valueType));
-                bin_assert(reader.read <']'>());
+                bin_assert(reader.read_symbol<'['>());
+                bin_assert(reader.read_typename(result.keyType));
+                bin_assert(reader.read_symbol<','>());
+                bin_assert(reader.read_typename(result.valueType));
+                bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else {
                 value = ValueHelper::from_type(type);
@@ -418,10 +413,10 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto item = ValueHelper::from_type(value.valueType);
-                bin_assert(read_value(item));
+                auto list_item = ValueHelper::from_type(value.valueType);
+                bin_assert(read_value(list_item));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Element{ std::move(item) });
+                value.items.emplace_back(Element{ std::move(list_item) });
             }
             return true;
         }
@@ -430,11 +425,11 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             if (!end) {
-                auto item = ValueHelper::from_type(value.valueType);
-                bin_assert(read_value(item));
+                auto option_item = ValueHelper::from_type(value.valueType);
+                bin_assert(read_value(option_item));
                 bin_assert(reader.read_nested_separator_or_end(end));
                 bin_assert(end);
-                value.items.emplace_back(Element{ std::move(item) });
+                value.items.emplace_back(Element{ std::move(option_item) });
             }
             return true;
         }
@@ -443,13 +438,13 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto key = ValueHelper::from_type(value.keyType);
-                auto item = ValueHelper::from_type(value.valueType);
-                bin_assert(read_value(key));
-                bin_assert(reader.read<'='>());
-                bin_assert(read_value(item));
+                auto map_key = ValueHelper::from_type(value.keyType);
+                auto map_value = ValueHelper::from_type(value.valueType);
+                bin_assert(read_value(map_key));
+                bin_assert(reader.read_symbol<'='>());
+                bin_assert(read_value(map_value));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Pair{ std::move(key), std::move(item) });
+                value.items.emplace_back(Pair{ std::move(map_key), std::move(map_value) });
             }
             return true;
         }
@@ -459,14 +454,14 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                FNV1a name = {};
-                Value item = {};
-                bin_assert(reader.read_hash_name(name));
-                bin_assert(read_value_type(item));
-                bin_assert(reader.read<'='>());
-                bin_assert(read_value(item));
+                FNV1a field_name = {};
+                Value field_value = {};
+                bin_assert(reader.read_hash_name(field_name));
+                bin_assert(read_value_type(field_value));
+                bin_assert(reader.read_symbol<'='>());
+                bin_assert(read_value(field_value));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Field{ std::move(name), std::move(item) });
+                value.items.emplace_back(Field{ std::move(field_name), std::move(field_value) });
             }
             return true;
         }
@@ -480,14 +475,14 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                FNV1a name = {};
-                Value item = {};
-                bin_assert(reader.read_hash_name(name));
-                bin_assert(read_value_type(item));
-                bin_assert(reader.read<'='>());
-                bin_assert(read_value(item));
+                FNV1a field_name = {};
+                Value field_value = {};
+                bin_assert(reader.read_hash_name(field_name));
+                bin_assert(read_value_type(field_value));
+                bin_assert(reader.read_symbol<'='>());
+                bin_assert(read_value(field_value));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Field{ std::move(name), std::move(item) });
+                value.items.emplace_back(Field{ std::move(field_name), std::move(field_value) });
             }
             return true;
         }
@@ -508,35 +503,50 @@ namespace ritobin {
         }
 
         bool read_value_visit(Vec2& value) noexcept {
-            return read_array(value.value);
+            bin_assert(read_array<float, 2>(value.value));
+            return true;
         }
 
         bool read_value_visit(Vec3& value) noexcept {
-            return read_array(value.value);
+            bin_assert(read_array<float, 3>(value.value));
+            return true;
         }
 
         bool read_value_visit(Vec4& value) noexcept {
-            return read_array(value.value);
+            bin_assert(read_array<float, 4>(value.value));
+            return true;
         }
 
         bool read_value_visit(Mtx44& value) noexcept {
-            return read_array(value.value);
+            bin_assert(read_array<float, 16>(value.value));
+            return true;
         }
 
         bool read_value_visit(RGBA& value) noexcept {
-            return read_array(value.value);
+            bin_assert(read_array<uint8_t, 4>(value.value));
+            return true;
         }
 
-        bool read_value_visit(None& value) noexcept {
+        bool read_value_visit(None&) noexcept {
             std::string name;
             bin_assert(reader.read_name(name));
             bin_assert(name == "null");
             return true;
         }
 
+        bool read_value_visit(Bool& value) noexcept {
+            bin_assert(reader.read_bool(value.value));
+            return true;
+        }
+
+        bool read_value_visit(Flag& value) noexcept {
+            bin_assert(reader.read_bool(value.value));
+            return true;
+        }
+
         template<typename T>
         bool read_value_visit(T& value) noexcept {
-            bin_assert(reader.read(value.value));
+            bin_assert(reader.read_number(value.value));
             return true;
         }
 
@@ -547,7 +557,7 @@ namespace ritobin {
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
                 bin_assert(counter < S);
-                bin_assert(reader.read(value[counter]));
+                bin_assert(reader.read_number(value[counter]));
                 bin_assert(reader.read_nested_separator_or_end(end));
                 counter++;
             }
@@ -557,9 +567,41 @@ namespace ritobin {
     };
 
     void Bin::read_text(char const* data, size_t size) {
-        BinTextReader reader = { *this, { data, data, data + size } };
+        BinTextReader reader = { *this, { data, data, data + size }, {} };
         if (!reader.process()) {
-            throw std::runtime_error(std::move(reader.error));
+            auto iter = data;
+            size_t line_number = 1;
+            auto line_start = data;
+            auto get_column = [&iter, &line_number, &line_start](char const* end) noexcept {
+                while(iter != end) {
+                    if(*iter == '\n') {
+                        line_start = iter;
+                        ++iter;
+                        ++line_number;
+                    } else {
+                        ++iter;
+                    }
+                }
+                return end - line_start;
+            };
+
+            std::string error;
+            for(auto e = reader.error.crbegin(); e != reader.error.crend(); e++) {
+                error.append(e->first);
+                error.append(" @ line: ");
+                auto column_number = get_column(e->second);
+                error.append(std::to_string(line_number));
+                error.append(", column: ");
+                error.append(std::to_string(column_number));
+                error.append("\n");
+            }
+            error.append("Last position @ line: ");
+            auto column_number = get_column(reader.reader.cur_);
+            error.append(std::to_string(line_number));
+            error.append(", column: ");
+            error.append(std::to_string(column_number));
+            error.append("\n");
+            throw std::runtime_error(std::move(error));
         }
     }
 }

@@ -70,8 +70,8 @@ namespace ritobin {
     };
 
     void BinUnhasher::unhash(Bin& bin) const noexcept {
-        if (auto entries = bin.sections.find("entries"); entries != bin.sections.end()) {
-            BinUnhasherImpl<>::unhash(lookup, entries->second);
+        for (auto& [key, value] : bin.sections) {
+            BinUnhasherImpl<>::unhash(lookup, value);
         }
     }
 

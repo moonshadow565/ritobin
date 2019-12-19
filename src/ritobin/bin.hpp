@@ -12,7 +12,7 @@
 #include <unordered_map>
 
 namespace ritobin {
-    enum class Type {
+    enum class Type : uint8_t {
         NONE = 0,
         BOOL = 1,
         I8 = 2,
@@ -325,7 +325,6 @@ namespace ritobin {
     };
     using ValueHelper = ValueHelperImpl<Value>;
 
-
     struct Bin {
         std::unordered_map<std::string, Value> sections;
 
@@ -339,7 +338,6 @@ namespace ritobin {
         void write_text(std::vector<char>& out, size_t ident_size = 2) const;
         void write_text_file(std::string const& filename, size_t ident_size = 2) const;
     };
-
 
     using HashTable = std::unordered_map<uint32_t, std::string>;
     struct BinUnhasher {

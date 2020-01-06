@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
     fs::path outfile = argc > 2 ? argv[2] : "";
     if (argc < 3) {
         outfile = infile;
-        outfile.replace_extension("qml");
+        outfile.replace_extension("py");
     }
 
     ritobin::BinUnhasher unhasher = {};

@@ -102,7 +102,6 @@ namespace ritobin {
                         '\\', 'x', 
                         digits[(c >> 4) & 0x0F],
                         digits[c & 0x0F],
-                        '0', 
                         '\0' 
                     };
                     write_raw(hex);

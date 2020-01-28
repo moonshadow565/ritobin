@@ -59,6 +59,7 @@ namespace ritobin {
         void write(std::array<float, 16> const& value) noexcept {
             ident_inc();
             write_raw("{\n");
+            pad();
             for (size_t i = 0; i < 16; i++) {
                 write(value[i]);
                 if (i % 4 == 3) {

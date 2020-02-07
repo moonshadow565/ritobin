@@ -91,12 +91,12 @@ namespace ritobin {
             write_raw("\"");
             for (char c : str) {
                 if (c == '\t') { write_raw("\\t"); } 
-                else if (c == '\n') {  write_raw("\\n"); } 
+                else if (c == '\n') {  write_raw("\\n"); }
                 else if (c == '\r') {  write_raw("\\r"); }
                 else if (c == '\b') {  write_raw("\\b"); }
                 else if (c == '\f') {  write_raw("\\f"); }
                 else if (c == '\\') { write_raw("\\\\"); }
-                else if (c == '"') { write_raw("\""); }
+                else if (c == '"') { write_raw("\\\""); }
                 else if (c < 0x20 || c > 0x7E) {
                     constexpr char digits[] = "0123456789abcdef";
                     char hex[] = { 

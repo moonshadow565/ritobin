@@ -32,12 +32,12 @@ namespace ritobin {
         STRING = 16,
         HASH = 17,
         LIST = 18,
-        POINTER = 19,
-        EMBED = 20,
-        LINK = 21,
-        OPTION = 22,
-        MAP = 23,
-        FLAG = 24,
+        POINTER = 19 + 1,
+        EMBED = 20 + 1,
+        LINK = 21 + 1,
+        OPTION = 22 + 1,
+        MAP = 23 + 1,
+        FLAG = 24 + 1,
     };
 
     struct FNV1a {

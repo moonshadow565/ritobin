@@ -63,15 +63,14 @@ namespace ritobin {
             if (!read(raw)) {
                 return false;
             }
-            uint32_t backup = raw;
             if (raw & 0x80) {
-                raw -= 0x80;
+                raw &= 0x7F;
                 raw += 18;
             }
-            value = static_cast<Type>(raw);
-            if (value > Type::FLAG) {
+            if (raw == 19) {
                 return false;
             }
+            value = static_cast<Type>(raw);
             return value <= Type::FLAG;
         }
 

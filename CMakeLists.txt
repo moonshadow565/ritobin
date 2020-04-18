@@ -14,6 +14,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 endif()
 
 add_library(ritobin STATIC
+    src/ritobin/numconv.hpp
     src/ritobin/bin.cpp
     src/ritobin/bin.hpp
     src/ritobin/binary_read.cpp

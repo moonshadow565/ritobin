@@ -1,6 +1,6 @@
 #include <stdexcept>
-#include <charconv>
 #include "bin.hpp"
+#include "numconv.hpp"
 
 
 namespace ritobin {
@@ -186,11 +186,9 @@ namespace ritobin {
                     state = State::Take;
                     escaped[1] = c;
                     uint8_t value = 0;
-                    auto [p, ec] = std::from_chars(escaped, escaped + 2, value, 16);
-                    if (ec == std::errc{} && p == escaped + 2) {
+                    if (to_num({escaped, 2}, value, 16)) {
                         result.push_back(static_cast<char>(value));
-                    } else {
-                        return false;
+                        return true;
                     }
                 } else if (state == State::Escape_Unicode_0) {
                     state = State::Escape_Unicode_1;
@@ -205,12 +203,11 @@ namespace ritobin {
                     state = State::Take;
                     escaped[3] = c;
                     uint16_t value = 0;
-                    auto [p, ec] = std::from_chars(escaped, escaped + 4, value, 16);
-                    if (ec == std::errc{} && p == escaped + 4) {
+                    if (to_num({escaped, 4}, value, 16)) {
                         // FIXME: encode unicode
-                    } else {
                         return false;
                     }
+                    return false;
                 } else {
                     if (c == '\\') {
                         state = State::Escape;
@@ -236,11 +233,8 @@ namespace ritobin {
             if (word[0] != '0' || (word[1] != 'x' && word[1] != 'X')) {
                 return false;
             }
-            auto const beg = word.data() + 2;
-            auto const end = word.data() + word.size();
             uint32_t result = 0;
-            auto const [ptr, ec] = std::from_chars(beg, end, result, 16);
-            if (ptr == end && ec == std::errc{}) {
+            if (to_num({word.data() + 2, word.size() - 2}, result, 16)) {
                 value = FNV1a{ result };
                 return true;
             }
@@ -326,15 +320,7 @@ namespace ritobin {
             if (word.empty()) {
                 return false;
             }
-            auto const beg = word.data();
-            auto const end = word.data() + word.size();
-            auto const [ptr, ec] = std::from_chars(beg, end, value);
-            if (ptr == end && ec == std::errc{}) {
-                return true;
-            }
-            // FIXME: this only works on msvc for now
-            // alternatively use: https://github.com/ulfjack/ryu
-            return false;
+            return to_num(word, value);
         }
     };
 

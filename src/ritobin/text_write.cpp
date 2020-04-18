@@ -1,5 +1,5 @@
 #include <stdexcept>
-#include <charconv>
+#include "numconv.hpp"
 #include "bin.hpp"
 
 namespace ritobin {
@@ -36,11 +36,9 @@ namespace ritobin {
         template<typename T>
         void write(T value) noexcept {
             static_assert(std::is_arithmetic_v<T>);
-            char buffer[64] = {};
-            auto [ptr, ec] = std::to_chars(buffer, buffer + sizeof(buffer), value);
-            buffer_.insert(buffer_.end(), buffer, ptr);
-            // FIXME: this only works on msvc for now
-            // alternatively use: https://github.com/ulfjack/ryu
+            std::string result;
+            from_num(result, value);
+            buffer_.insert(buffer_.end(), result.begin(), result.end());
         }
 
         template<typename T, size_t SIZE>

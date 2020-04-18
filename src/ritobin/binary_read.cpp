@@ -63,6 +63,9 @@ namespace ritobin {
             if (!read(raw)) {
                 return false;
             }
+            if (raw == 0x81) {
+                raw = 0x80;
+            }
             if (raw & 0x80) {
                 raw &= 0x7F;
                 raw += 18;

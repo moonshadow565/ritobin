@@ -63,15 +63,9 @@ namespace ritobin {
             if (!read(raw)) {
                 return false;
             }
-            if (raw == 0x81) {
-                raw = 0x80;
-            }
             if (raw & 0x80) {
                 raw &= 0x7F;
                 raw += 18;
-            }
-            if (raw == 19) {
-                return false;
             }
             value = static_cast<Type>(raw);
             return value <= Type::FLAG;
@@ -233,9 +227,7 @@ namespace ritobin {
         bool read_value_visit(Option& value) noexcept {
             uint8_t count = 0;
             bin_assert(reader.read(value.valueType));
-            bin_assert(value.valueType != Type::MAP);
-            bin_assert(value.valueType != Type::LIST);
-            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(!is_container(value.valueType));
             bin_assert(reader.read(count));
             if (count != 0) {
                 auto& [item] = value.items.emplace_back();
@@ -248,9 +240,23 @@ namespace ritobin {
             uint32_t size = 0;
             uint32_t count = 0;
             bin_assert(reader.read(value.valueType));
-            bin_assert(value.valueType != Type::MAP);
-            bin_assert(value.valueType != Type::LIST);
-            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(!is_container(value.valueType));
+            bin_assert(reader.read(size));
+            size_t position = reader.position();
+            bin_assert(reader.read(count));
+            for (size_t i = 0; i != count; i++) {
+                auto& [item] = value.items.emplace_back();
+                bin_assert(read_value_of(item, value.valueType));
+            }
+            bin_assert(reader.position() == position + size);
+            return true;
+        }
+
+        bool read_value_visit(List2& value) noexcept {
+            uint32_t size = 0;
+            uint32_t count = 0;
+            bin_assert(reader.read(value.valueType));
+            bin_assert(!is_container(value.valueType));
             bin_assert(reader.read(size));
             size_t position = reader.position();
             bin_assert(reader.read(count));
@@ -268,9 +274,7 @@ namespace ritobin {
             bin_assert(reader.read(value.keyType));
             bin_assert(value.keyType <= Type::HASH);
             bin_assert(reader.read(value.valueType));
-            bin_assert(value.valueType != Type::MAP);
-            bin_assert(value.valueType != Type::LIST);
-            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(!is_container(value.valueType));
             bin_assert(reader.read(size));
             size_t position = reader.position();
             bin_assert(reader.read(count));

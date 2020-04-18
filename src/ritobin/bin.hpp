@@ -32,6 +32,7 @@ namespace ritobin {
         STRING = 16,
         HASH = 17,
         LIST = 18,
+        LIST2 = 19,
         POINTER = 19 + 1,
         EMBED = 20 + 1,
         LINK = 21 + 1,
@@ -39,6 +40,10 @@ namespace ritobin {
         MAP = 23 + 1,
         FLAG = 24 + 1,
     };
+
+    inline constexpr bool is_container(Type type) noexcept {
+        return type == Type::MAP || type == Type::LIST || type == Type::LIST2 || type == Type::OPTION;
+    }
 
     struct FNV1a {
     private:
@@ -206,6 +211,13 @@ namespace ritobin {
         ElementList items;
     };
 
+    struct List2 {
+        static inline constexpr Type type = Type::LIST2;
+        static inline constexpr char type_name[] = "list2";
+        Type valueType;
+        ElementList items;
+    };
+
     struct Pointer {
         static inline constexpr Type type = Type::POINTER;
         static inline constexpr char type_name[] = "pointer";
@@ -267,6 +279,7 @@ namespace ritobin {
         String,
         Hash,
         List,
+        List2,
         Pointer,
         Embed,
         Link,

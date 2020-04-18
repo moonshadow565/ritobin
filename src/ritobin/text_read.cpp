@@ -369,12 +369,21 @@ namespace ritobin {
                 List result = {};
                 bin_assert(reader.read_symbol<'['>());
                 bin_assert(reader.read_typename(result.valueType));
+                bin_assert(!is_container(result.valueType));
+                bin_assert(reader.read_symbol<']'>());
+                value = result;
+            } else if (type == Type::LIST2) {
+                List2 result = {};
+                bin_assert(reader.read_symbol<'['>());
+                bin_assert(reader.read_typename(result.valueType));
+                bin_assert(!is_container(result.valueType));
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else if (type == Type::OPTION) {
                 Option result = {};
                 bin_assert(reader.read_symbol<'['>());
                 bin_assert(reader.read_typename(result.valueType));
+                bin_assert(!is_container(result.valueType));
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else if (type == Type::MAP) {
@@ -383,6 +392,7 @@ namespace ritobin {
                 bin_assert(reader.read_typename(result.keyType));
                 bin_assert(reader.read_symbol<','>());
                 bin_assert(reader.read_typename(result.valueType));
+                bin_assert(!is_container(result.valueType));
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else {
@@ -396,6 +406,18 @@ namespace ritobin {
         }
 
         bool read_value_visit(List& value) noexcept {
+            bool end = false;
+            bin_assert(reader.read_nested_begin(end));
+            while (!end) {
+                auto list_item = ValueHelper::from_type(value.valueType);
+                bin_assert(read_value(list_item));
+                bin_assert(reader.read_nested_separator_or_end(end));
+                value.items.emplace_back(Element{ std::move(list_item) });
+            }
+            return true;
+        }
+
+        bool read_value_visit(List2& value) noexcept {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {

@@ -198,9 +198,20 @@ namespace ritobin {
         }
 
         bool write_value_visit(List const& value) noexcept {
-            bin_assert(value.valueType != Type::MAP);
-            bin_assert(value.valueType != Type::LIST);
-            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(!is_container(value.valueType));
+            writer.write(value.valueType);
+            size_t position = writer.position();
+            writer.write(uint32_t{ 0 });
+            writer.write(static_cast<uint32_t>(value.items.size()));
+            for (auto const& [item] : value.items) {
+                bin_assert(write_value(item, value.valueType));
+            }
+            writer.write_at(position, writer.position() - position - 4);
+            return true;
+        }
+
+        bool write_value_visit(List2 const& value) noexcept {
+            bin_assert(!is_container(value.valueType));
             writer.write(value.valueType);
             size_t position = writer.position();
             writer.write(uint32_t{ 0 });
@@ -214,9 +225,7 @@ namespace ritobin {
 
         bool write_value_visit(Map const& value) noexcept {
             bin_assert(value.keyType <= Type::HASH);
-            bin_assert(value.valueType != Type::MAP);
-            bin_assert(value.valueType != Type::LIST);
-            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(!is_container(value.valueType));
             writer.write(value.keyType);
             writer.write(value.valueType);
             size_t position = writer.position();

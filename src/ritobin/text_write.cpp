@@ -236,6 +236,13 @@ namespace ritobin {
             writer.write_raw("]");
         }
 
+        void write_type_visit(List2 const& value) noexcept {
+            writer.write(value.type);
+            writer.write_raw("[");
+            writer.write(value.valueType);
+            writer.write_raw("]");
+        }
+
         void write_type_visit(Option const& value) noexcept {
             writer.write(value.type);
             writer.write_raw("[");
@@ -284,6 +291,10 @@ namespace ritobin {
         }
 
         void write_value_visit(List const& value) noexcept {
+            write_items(value.items);
+        }
+
+        void write_value_visit(List2 const& value) noexcept {
             write_items(value.items);
         }
 

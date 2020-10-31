@@ -31,15 +31,23 @@ namespace ritobin {
         RGBA = 15,
         STRING = 16,
         HASH = 17,
-        LIST = 18,
-        LIST2 = 19,
-        POINTER = 19 + 1,
-        EMBED = 20 + 1,
-        LINK = 21 + 1,
-        OPTION = 22 + 1,
-        MAP = 23 + 1,
-        FLAG = 24 + 1,
+        LIST = 0x80 | 0,
+        LIST2 = 0x80 | 1,
+        POINTER = 0x80 | 2,
+        EMBED = 0x80 | 3,
+        LINK = 0x80 | 4,
+        OPTION = 0x80 | 5,
+        MAP = 0x80 | 6,
+        FLAG = 0x80 | 7,
     };
+
+    constexpr inline auto MAX_PRIMITIVE = Type::HASH;
+
+    constexpr inline auto MAX_COMPLEX = Type::FLAG;
+
+    inline constexpr bool is_primitive(Type type) noexcept {
+        return !((uint8_t)type & 0x80);
+    }
 
     inline constexpr bool is_container(Type type) noexcept {
         return type == Type::MAP || type == Type::LIST || type == Type::LIST2 || type == Type::OPTION;

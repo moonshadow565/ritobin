@@ -63,12 +63,8 @@ namespace ritobin {
             if (!read(raw)) {
                 return false;
             }
-            if (raw & 0x80) {
-                raw &= 0x7F;
-                raw += 18;
-            }
             value = static_cast<Type>(raw);
-            return value <= Type::FLAG;
+            return is_primitive(value) ? value <= MAX_PRIMITIVE : value <= MAX_COMPLEX;
         }
 
         bool read(FNV1a& value) noexcept {
@@ -272,7 +268,7 @@ namespace ritobin {
             uint32_t size = 0;
             uint32_t count = 0;
             bin_assert(reader.read(value.keyType));
-            bin_assert(value.keyType <= Type::HASH);
+            bin_assert(is_primitive(value.keyType));
             bin_assert(reader.read(value.valueType));
             bin_assert(!is_container(value.valueType));
             bin_assert(reader.read(size));

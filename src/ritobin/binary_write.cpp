@@ -42,12 +42,7 @@ namespace ritobin {
         }
 
         void write(Type type) noexcept {
-            unsigned int raw = static_cast<unsigned int>(type);
-            if (raw >= 18) {
-                raw -= 18;
-                raw |= 0x80;
-            }
-            write(static_cast<uint8_t>(raw));
+            write(static_cast<uint8_t>(type));
         }
 
         void write(std::string const& value) {
@@ -224,7 +219,7 @@ namespace ritobin {
         }
 
         bool write_value_visit(Map const& value) noexcept {
-            bin_assert(value.keyType <= Type::HASH);
+            bin_assert(is_primitive(value.keyType));
             bin_assert(!is_container(value.valueType));
             writer.write(value.keyType);
             writer.write(value.valueType);

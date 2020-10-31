@@ -363,7 +363,7 @@ namespace ritobin {
             Type type = {};
             bin_assert(reader.read_symbol<':'>());
             bin_assert(reader.read_typename(type));
-            bin_assert(type <= Type::FLAG);
+            // TODO: do we need any checks on type here?
 
             if (type == Type::LIST) {
                 List result = {};

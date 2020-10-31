@@ -72,7 +72,17 @@ namespace ritobin {
             if (!read(h)) {
                 return false;
             }
-            value = { h };
+            value = FNV1a{ h };
+            return true;
+        }
+
+
+        bool read(XXH64& value) noexcept {
+            uint64_t h;
+            if (!read(h)) {
+                return false;
+            }
+            value = XXH64{ h };
             return true;
         }
     };

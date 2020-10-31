@@ -20,10 +20,12 @@ int main(int argc, char** argv) {
     }
 
     ritobin::BinUnhasher unhasher = {};
-    unhasher.load_CDTB((exedir / "hashes.binentries.txt").string());
-    unhasher.load_CDTB((exedir / "hashes.binhashes.txt").string());
-    unhasher.load_CDTB((exedir / "hashes.bintypes.txt").string());
-    unhasher.load_CDTB((exedir / "hashes.binfields.txt").string());
+    unhasher.load_fnv1a_CDTB((exedir / "hashes.binentries.txt").string());
+    unhasher.load_fnv1a_CDTB((exedir / "hashes.binhashes.txt").string());
+    unhasher.load_fnv1a_CDTB((exedir / "hashes.bintypes.txt").string());
+    unhasher.load_fnv1a_CDTB((exedir / "hashes.binfields.txt").string());
+    unhasher.load_xxh64_CDTB((exedir / "hashes.game.txt").string());
+    unhasher.load_xxh64_CDTB((exedir / "hashes.lcu.txt").string());
 
     try {
         ritobin::Bin bin = {};

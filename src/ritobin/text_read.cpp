@@ -128,10 +128,6 @@ namespace ritobin {
                 Escape_CariageReturn,
                 Escape_Byte_0,
                 Escape_Byte_1,
-                Escape_Unicode_0,
-                Escape_Unicode_1,
-                Escape_Unicode_2,
-                Escape_Unicode_3,
             } state = State::Take;
             char escaped[8];
             while (cur_ != cap_) {
@@ -165,7 +161,6 @@ namespace ritobin {
                         state = State::Escape_CariageReturn;
                     } else if (c == 'u') {
                         // FIXME: implement unicode code points
-                        state = State::Escape_Unicode_0;
                         return false;
                     } else if (c == 'x') {
                         state = State::Escape_Byte_0;
@@ -188,30 +183,13 @@ namespace ritobin {
                     uint8_t value = 0;
                     if (to_num({escaped, 2}, value, 16)) {
                         result.push_back(static_cast<char>(value));
-                        return true;
-                    }
-                } else if (state == State::Escape_Unicode_0) {
-                    state = State::Escape_Unicode_1;
-                    escaped[0] = c;
-                } else if (state == State::Escape_Unicode_1) {
-                    state = State::Escape_Unicode_2;
-                    escaped[1] = c;
-                } else if (state == State::Escape_Unicode_2) {
-                    state = State::Escape_Unicode_3;
-                    escaped[2] = c;
-                } else if (state == State::Escape_Unicode_3) {
-                    state = State::Take;
-                    escaped[3] = c;
-                    uint16_t value = 0;
-                    if (to_num({escaped, 4}, value, 16)) {
-                        // FIXME: encode unicode
+                    } else {
                         return false;
                     }
-                    return false;
                 } else {
                     if (c == '\\') {
                         state = State::Escape;
-                    }else if (c < ' ') {
+                    } else if (c < ' ') {
                         return false;
                     } else if (c == term) {
                         cur_++;
@@ -236,6 +214,22 @@ namespace ritobin {
             uint32_t result = 0;
             if (to_num({word.data() + 2, word.size() - 2}, result, 16)) {
                 value = FNV1a{ result };
+                return true;
+            }
+            return false;
+        }
+
+        bool read_hash(XXH64& value) noexcept {
+            auto const word = read_word();
+            if (word.size() < 2) {
+                return false;
+            }
+            if (word[0] != '0' || (word[1] != 'x' && word[1] != 'X')) {
+                return false;
+            }
+            uint64_t result = 0;
+            if (to_num({word.data() + 2, word.size() - 2}, result, 16)) {
+                value = XXH64{ result };
                 return true;
             }
             return false;
@@ -275,6 +269,19 @@ namespace ritobin {
         }
 
         bool read_hash_string(FNV1a& value) noexcept {
+            auto const backup = cur_;
+            if (read_hash(value)) {
+                return true;
+            }
+            cur_ = backup;
+            if (std::string str; read_string(str)) {
+                value = { str };
+                return true;
+            }
+            return false;
+        }
+
+        bool read_hash_string(XXH64& value) noexcept {
             auto const backup = cur_;
             if (read_hash(value)) {
                 return true;
@@ -506,6 +513,11 @@ namespace ritobin {
         }
 
         bool read_value_visit(Hash& value) noexcept {
+            bin_assert(reader.read_hash_string(value.value));
+            return true;
+        }
+
+        bool read_value_visit(File& value) noexcept {
             bin_assert(reader.read_hash_string(value.value));
             return true;
         }

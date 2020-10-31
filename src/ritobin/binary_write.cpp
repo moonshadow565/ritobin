@@ -54,6 +54,10 @@ namespace ritobin {
             write(value.hash());
         }
 
+        void write(XXH64 const& value) {
+            write(value.hash());
+        }
+
         inline size_t position() const noexcept {
             return buffer_.size();
         }

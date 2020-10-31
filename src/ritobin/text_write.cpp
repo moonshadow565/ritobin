@@ -125,6 +125,16 @@ namespace ritobin {
             write_raw(std::string_view{ result, sizeof(result) });
         }
 
+        void write_hex(uint64_t hex) noexcept {
+            constexpr char digits[] = "0123456789abcdef";
+            char result[18] = { '0', 'x' };
+            for (size_t i = 17; i > 1; i--) {
+                result[i] = digits[hex & 0x0Fu];
+                hex >>= 4;
+            }
+            write_raw(std::string_view{ result, sizeof(result) });
+        }
+
         void write_name(FNV1a const& value) noexcept {
             if (!value.str().empty()) {
                 write_raw(value.str());
@@ -134,6 +144,14 @@ namespace ritobin {
         }
 
         void write_string(FNV1a const& value) noexcept {
+            if (!value.str().empty()) {
+                write(value.str());
+            } else {
+                write_hex(value.hash());
+            }
+        }
+
+        void write_string(XXH64 const& value) noexcept {
             if (!value.str().empty()) {
                 write(value.str());
             } else {
@@ -307,6 +325,10 @@ namespace ritobin {
         }
 
         void write_value_visit(Hash const& value) noexcept {
+            writer.write_string(value.value);
+        }
+
+        void write_value_visit(File const& value) noexcept {
             writer.write_string(value.value);
         }
 

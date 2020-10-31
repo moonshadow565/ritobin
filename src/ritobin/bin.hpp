@@ -10,6 +10,7 @@
 #include <array>
 #include <vector>
 #include <unordered_map>
+#include <bit>
 
 namespace ritobin {
     enum class Type : uint8_t {
@@ -31,6 +32,7 @@ namespace ritobin {
         RGBA = 15,
         STRING = 16,
         HASH = 17,
+        FILE = 18,
         LIST = 0x80 | 0,
         LIST2 = 0x80 | 1,
         POINTER = 0x80 | 2,
@@ -41,7 +43,7 @@ namespace ritobin {
         FLAG = 0x80 | 7,
     };
 
-    constexpr inline auto MAX_PRIMITIVE = Type::HASH;
+    constexpr inline auto MAX_PRIMITIVE = Type::FILE;
 
     constexpr inline auto MAX_COMPLEX = Type::FLAG;
 
@@ -79,12 +81,131 @@ namespace ritobin {
         }
 
         inline FNV1a& operator=(uint32_t h) noexcept {
-            hash_ = h;
-            str_.clear();
+            if (hash_ != h) {
+                hash_ = h;
+                str_.clear();
+            }
             return *this;
         }
         
         inline uint32_t hash() const noexcept {
+            return hash_;
+        }
+
+        inline std::string_view str() const& noexcept {
+            return str_;
+        }
+
+        inline std::string str() && noexcept {
+            return std::move(str_);
+        }
+    };
+
+    struct XXH64 {
+    private:
+        uint64_t hash_ = {};
+        std::string str_ = {};
+        static constexpr uint64_t xxh64(char const* data, size_t size, uint64_t seed = 0) noexcept {
+            constexpr uint64_t Prime1 = 11400714785074694791U;
+            constexpr uint64_t Prime2 = 14029467366897019727U;
+            constexpr uint64_t Prime3 =  1609587929392839161U;
+            constexpr uint64_t Prime4 =  9650029242287828579U;
+            constexpr uint64_t Prime5 =  2870177450012600261U;
+            constexpr auto Char = [](char c) constexpr -> uint64_t {
+                return static_cast<uint8_t>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+            };
+            constexpr auto HalfBlock = [Char](char const* data) constexpr -> uint64_t {
+                return Char(*data)
+                        | (Char(*(data + 1)) << 8)
+                        | (Char(*(data + 2)) << 16)
+                        | (Char(*(data + 3)) << 24);
+            };
+            constexpr auto Block = [Char](char const* data) constexpr -> uint64_t {
+                return Char(*data)
+                        | (Char(*(data + 1)) << 8)
+                        | (Char(*(data + 2)) << 16)
+                        | (Char(*(data + 3)) << 24)
+                        | (Char(*(data + 4)) << 32)
+                        | (Char(*(data + 5)) << 40)
+                        | (Char(*(data + 6)) << 48)
+                        | (Char(*(data + 7)) << 56);
+            };
+            constexpr auto ROL = [](uint64_t value, int ammount) -> uint64_t {
+                return std::rotl(value, ammount);
+            };
+            char const* const end = data + size;
+            uint64_t result = 0;
+            if (size >= 32u) {
+                uint64_t s1 = seed + Prime1 + Prime2;
+                uint64_t s2 = seed + Prime2;
+                uint64_t s3 = seed;
+                uint64_t s4 = seed - Prime1;
+                for(; data + 32 <= end; data += 32) {
+                    s1 = ROL(s1 + Block(data) * Prime2, 31) * Prime1;
+                    s2 = ROL(s2 + Block(data + 8) * Prime2, 31) * Prime1;
+                    s3 = ROL(s3 + Block(data + 16) * Prime2, 31) * Prime1;
+                    s4 = ROL(s4 + Block(data + 24) * Prime2, 31) * Prime1;
+                }
+                result  = ROL(s1,  1) +
+                          ROL(s2,  7) +
+                          ROL(s3, 12) +
+                          ROL(s4, 18);
+                result ^= ROL(s1 * Prime2, 31) * Prime1;
+                result = result * Prime1 + Prime4;
+                result ^= ROL(s2 * Prime2, 31) * Prime1;
+                result = result * Prime1 + Prime4;
+                result ^= ROL(s3 * Prime2, 31) * Prime1;
+                result = result * Prime1 + Prime4;
+                result ^= ROL(s4 * Prime2, 31) * Prime1;
+                result = result * Prime1 + Prime4;
+            } else {
+                result = seed + Prime5;
+            }
+            result += static_cast<uint64_t>(size);
+            for(; data + 8 <= end; data += 8) {
+                result ^= ROL(Block(data) * Prime2, 31) * Prime1;
+                result = ROL(result, 27) * Prime1 + Prime4;
+            }
+            for(; data + 4 <= end; data += 4) {
+                result ^= HalfBlock(data) * Prime1;
+                result = ROL(result, 23) * Prime2 + Prime3;
+            }
+            for(; data != end; ++data) {
+                result ^= Char(*data) * Prime5;
+                result = ROL(result, 11) * Prime1;
+            }
+            result ^= result >> 33;
+            result *= Prime2;
+            result ^= result >> 29;
+            result *= Prime3;
+            result ^= result >> 32;
+            return result;
+        }
+        static constexpr uint64_t xxh64(std::string_view data, uint64_t seed = 0) noexcept {
+            return xxh64(data.data(), data.size(), seed);
+        }
+    public:
+        inline XXH64() noexcept = default;
+
+        inline XXH64(std::string str) noexcept : hash_(xxh64(str)), str_(std::move(str)) {}
+
+        inline XXH64(uint64_t h) noexcept : hash_(h), str_() {}
+
+        inline XXH64& operator=(std::string str) noexcept {
+            hash_ = xxh64(str);
+            str_ = std::move(str);
+            return *this;
+        }
+
+        inline XXH64& operator=(uint64_t h) noexcept {
+            if (hash_ != h) {
+                hash_ = h;
+                str_.clear();
+            }
+            return *this;
+        }
+
+        inline uint64_t hash() const noexcept {
             return hash_;
         }
 
@@ -212,6 +333,12 @@ namespace ritobin {
         FNV1a value;
     };
 
+    struct File {
+        static inline constexpr Type type = Type::FILE;
+        static inline constexpr char type_name[] = "file";
+        XXH64 value;
+    };
+
     struct List {
         static inline constexpr Type type = Type::LIST;
         static inline constexpr char type_name[] = "list";
@@ -286,6 +413,7 @@ namespace ritobin {
         RGBA,
         String,
         Hash,
+        File,
         List,
         List2,
         Pointer,
@@ -360,12 +488,13 @@ namespace ritobin {
         void write_text_file(std::string const& filename, size_t ident_size = 2) const;
     };
 
-    using HashTable = std::unordered_map<uint32_t, std::string>;
     struct BinUnhasher {
-        HashTable lookup;
+        std::unordered_map<uint32_t, std::string> fnv1a;
+        std::unordered_map<uint64_t, std::string> xxh64;
 
         void unhash(Bin& bin) const noexcept;
-        bool load_CDTB(std::string const& filename) noexcept;
+        bool load_fnv1a_CDTB(std::string const& filename) noexcept;
+        bool load_xxh64_CDTB(std::string const& filename) noexcept;
     };
 }
 

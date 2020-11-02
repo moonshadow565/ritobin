@@ -492,6 +492,9 @@ namespace ritobin {
         std::unordered_map<uint32_t, std::string> fnv1a;
         std::unordered_map<uint64_t, std::string> xxh64;
 
+        void unhash(FNV1a& value) const noexcept;
+        void unhash(XXH64& value) const noexcept;
+        void unhash(Value& value) const noexcept;
         void unhash(Bin& bin) const noexcept;
         bool load_fnv1a_CDTB(std::string const& filename) noexcept;
         bool load_xxh64_CDTB(std::string const& filename) noexcept;

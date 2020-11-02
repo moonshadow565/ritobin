@@ -5,92 +5,122 @@
 #include "bin.hpp"
 
 namespace ritobin {
-    struct BinUnhasherImpl {
-        BinUnhasher const& unhasher;
+    struct BinUnhasherVisit {
+        static void value(BinUnhasher const&, None const&) noexcept {}
 
-        void unhash(FNV1a& value) const noexcept {
-            if (value.str().empty() && value.hash() != 0) {
-                if (auto i = unhasher.fnv1a.find(value.hash()); i != unhasher.fnv1a.end()) {
-                    value = FNV1a(i->second);
-                }
-            }
+        static void value(BinUnhasher const&, Bool const&) noexcept {}
+
+        static void value(BinUnhasher const&, I8 const&) noexcept {}
+
+        static void value(BinUnhasher const&, U8 const&) noexcept {}
+
+        static void value(BinUnhasher const&, I16 const&) noexcept {}
+
+        static void value(BinUnhasher const&, U16 const&) noexcept {}
+
+        static void value(BinUnhasher const&, I32 const&) noexcept {}
+
+        static void value(BinUnhasher const&, U32 const&) noexcept {}
+
+        static void value(BinUnhasher const&, I64 const&) noexcept {}
+
+        static void value(BinUnhasher const&, U64 const&) noexcept {}
+
+        static void value(BinUnhasher const&, F32 const&) noexcept {}
+
+        static void value(BinUnhasher const&, Vec2 const&) noexcept {}
+
+        static void value(BinUnhasher const&, Vec3 const&) noexcept {}
+
+        static void value(BinUnhasher const&, Vec4 const&) noexcept {}
+
+        static void value(BinUnhasher const&, Mtx44 const&) noexcept {}
+
+        static void value(BinUnhasher const&, RGBA const&) noexcept {}
+
+        static void value(BinUnhasher const&, String const&) noexcept {}
+
+        static void value(BinUnhasher const& unhasher, Hash& value) noexcept {
+            unhasher.unhash(value.value);
         }
 
-        void unhash(XXH64& value) const noexcept {
-            if (value.str().empty() && value.hash() != 0) {
-                if (auto i = unhasher.xxh64.find(value.hash()); i != unhasher.xxh64.end()) {
-                    value = XXH64(i->second);
-                }
-            }
+        static void value(BinUnhasher const& unhasher, File& value) noexcept {
+            unhasher.unhash(value.value);
         }
 
-        template<typename T>
-        std::enable_if_t<std::is_arithmetic_v<T>> unhash(T&) const noexcept {}
-
-        template<typename T, size_t S>
-        void unhash(std::array<T, S>&) const noexcept {}
-
-        void unhash(std::string&) const noexcept {}
-
-        void unhash_value_visit(None&) const noexcept {}
-
-        void unhash_value_visit(Embed& value) const noexcept {
-            unhash(value.name);
+        static void value(BinUnhasher const& unhasher, List& value) noexcept {
             for (auto& item : value.items) {
-                unhash(item.key);
-                unhash_value(item.value);
+                unhasher.unhash(item.value);
             }
         }
 
-        void unhash_value_visit(Pointer& value) const noexcept {
-            unhash(value.name);
+        static void value(BinUnhasher const& unhasher, List2& value) noexcept {
             for (auto& item : value.items) {
-                unhash(item.key);
-                unhash_value(item.value);
+                unhasher.unhash(item.value);
             }
         }
 
-        void unhash_value_visit(List& value) const noexcept {
+        static void value(BinUnhasher const& unhasher, Pointer& value) noexcept {
+            unhasher.unhash(value.name);
             for (auto& item : value.items) {
-                unhash_value(item.value);
+                unhasher.unhash(item.key);
+                unhasher.unhash(item.value);
             }
         }
 
-        void unhash_value_visit(List2& value) const noexcept {
+        static void value(BinUnhasher const& unhasher, Embed& value) noexcept {
+            unhasher.unhash(value.name);
             for (auto& item : value.items) {
-                unhash_value(item.value);
+                unhasher.unhash(item.key);
+                unhasher.unhash(item.value);
             }
         }
 
-        void unhash_value_visit(Map& value) const noexcept {
+        static void value(BinUnhasher const& unhasher, Link& value) noexcept {
+            unhasher.unhash(value.value);
+        }
+
+        static void value(BinUnhasher const& unhasher, Option& value) noexcept {
             for (auto& item : value.items) {
-                unhash_value(item.key);
-                unhash_value(item.value);
+                unhasher.unhash(item.value);
             }
         }
 
-        void unhash_value_visit(Option& value) const noexcept {
+        static void value(BinUnhasher const& unhasher, Map& value) noexcept {
             for (auto& item : value.items) {
-                unhash_value(item.value);
+                unhasher.unhash(item.key);
+                unhasher.unhash(item.value);
             }
         }
 
-        template<typename T>
-        void unhash_value_visit(T& value) const noexcept {
-            unhash(value.value);
-        }
-
-        void unhash_value(Value& value) const noexcept {
-            std::visit([this](auto& value) {
-                unhash_value_visit(value);
-                }, value);
-        }
+        static void value(BinUnhasher const&, Flag const&) noexcept {}
     };
 
+    void BinUnhasher::unhash(FNV1a& value) const noexcept {
+        if (value.str().empty() && value.hash() != 0) {
+            if (auto i = fnv1a.find(value.hash()); i != fnv1a.end()) {
+                value = FNV1a(i->second);
+            }
+        }
+    }
+
+    void BinUnhasher::unhash(XXH64& value) const noexcept {
+        if (value.str().empty() && value.hash() != 0) {
+            if (auto i = xxh64.find(value.hash()); i != xxh64.end()) {
+                value = XXH64(i->second);
+            }
+        }
+    }
+
+    void BinUnhasher::unhash(Value &value) const noexcept {
+        std::visit([this](auto& value) {
+            BinUnhasherVisit::value(*this, value);
+        }, value);
+    }
+
     void BinUnhasher::unhash(Bin& bin) const noexcept {
-        BinUnhasherImpl impl { *this };
         for (auto& [key, value] : bin.sections) {
-            impl.unhash_value(value);
+            unhash(value);
         }
     }
 

@@ -17,7 +17,9 @@ add_library(ritobin STATIC
     src/ritobin/numconv.hpp
     src/ritobin/bin.cpp
     src/ritobin/bin.hpp
-    src/ritobin/bin_morph.cpp
+    src/ritobin/bin_morph_value.cpp
+    src/ritobin/bin_morph_type_key.cpp
+    src/ritobin/bin_morph_type_value.cpp
     src/ritobin/binary_read.cpp
     src/ritobin/binary_write.cpp
     src/ritobin/text_read.cpp

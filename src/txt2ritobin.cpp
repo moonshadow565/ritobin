@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
         fputs(err.what(), stderr);
         if (argc < 3) {
             fputs("Press enter to continue...", stderr);
-            int c = getc(stdin);
+            [[maybe_unused]] int c = getc(stdin);
         }
         return -1;
     }

@@ -76,7 +76,6 @@ namespace ritobin {
             return true;
         }
 
-
         bool read(XXH64& value) noexcept {
             uint64_t h;
             if (!read(h)) {
@@ -180,7 +179,7 @@ namespace ritobin {
         }
 
         bool read_value_of(Value& value, Type type) noexcept {
-            value = ValueHelper::from_type(type);
+            value = ValueHelper::type_to_value(type);
             return std::visit([this](auto&& value) {
                 return read_value_visit(std::forward<decltype(value)>(value));
             }, value);

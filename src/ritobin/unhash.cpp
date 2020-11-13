@@ -6,97 +6,97 @@
 
 namespace ritobin {
     struct BinUnhasherVisit {
-        static void value(BinUnhasher const&, None const&) noexcept {}
+        static void value(BinUnhasher const&, None const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, Bool const&) noexcept {}
+        static void value(BinUnhasher const&, Bool const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, I8 const&) noexcept {}
+        static void value(BinUnhasher const&, I8 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, U8 const&) noexcept {}
+        static void value(BinUnhasher const&, U8 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, I16 const&) noexcept {}
+        static void value(BinUnhasher const&, I16 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, U16 const&) noexcept {}
+        static void value(BinUnhasher const&, U16 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, I32 const&) noexcept {}
+        static void value(BinUnhasher const&, I32 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, U32 const&) noexcept {}
+        static void value(BinUnhasher const&, U32 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, I64 const&) noexcept {}
+        static void value(BinUnhasher const&, I64 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, U64 const&) noexcept {}
+        static void value(BinUnhasher const&, U64 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, F32 const&) noexcept {}
+        static void value(BinUnhasher const&, F32 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, Vec2 const&) noexcept {}
+        static void value(BinUnhasher const&, Vec2 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, Vec3 const&) noexcept {}
+        static void value(BinUnhasher const&, Vec3 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, Vec4 const&) noexcept {}
+        static void value(BinUnhasher const&, Vec4 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, Mtx44 const&) noexcept {}
+        static void value(BinUnhasher const&, Mtx44 const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, RGBA const&) noexcept {}
+        static void value(BinUnhasher const&, RGBA const&, int) noexcept {}
 
-        static void value(BinUnhasher const&, String const&) noexcept {}
+        static void value(BinUnhasher const&, String const&, int) noexcept {}
 
-        static void value(BinUnhasher const& unhasher, Hash& value) noexcept {
-            unhasher.unhash(value.value);
+        static void value(BinUnhasher const& unhasher, Hash& value, int) noexcept {
+            unhasher.unhash_hash(value.value);
         }
 
-        static void value(BinUnhasher const& unhasher, File& value) noexcept {
-            unhasher.unhash(value.value);
+        static void value(BinUnhasher const& unhasher, File& value, int) noexcept {
+            unhasher.unhash_hash(value.value);
         }
 
-        static void value(BinUnhasher const& unhasher, List& value) noexcept {
+        static void value(BinUnhasher const& unhasher, List& value, int max_depth) noexcept {
             for (auto& item : value.items) {
-                unhasher.unhash(item.value);
+                unhasher.unhash_value(item.value, max_depth);
             }
         }
 
-        static void value(BinUnhasher const& unhasher, List2& value) noexcept {
+        static void value(BinUnhasher const& unhasher, List2& value, int max_depth) noexcept {
             for (auto& item : value.items) {
-                unhasher.unhash(item.value);
+                unhasher.unhash_value(item.value, max_depth);
             }
         }
 
-        static void value(BinUnhasher const& unhasher, Pointer& value) noexcept {
-            unhasher.unhash(value.name);
+        static void value(BinUnhasher const& unhasher, Pointer& value, int max_depth) noexcept {
+            unhasher.unhash_hash(value.name);
             for (auto& item : value.items) {
-                unhasher.unhash(item.key);
-                unhasher.unhash(item.value);
+                unhasher.unhash_hash(item.key);
+                unhasher.unhash_value(item.value, max_depth);
             }
         }
 
-        static void value(BinUnhasher const& unhasher, Embed& value) noexcept {
-            unhasher.unhash(value.name);
+        static void value(BinUnhasher const& unhasher, Embed& value, int max_depth) noexcept {
+            unhasher.unhash_hash(value.name);
             for (auto& item : value.items) {
-                unhasher.unhash(item.key);
-                unhasher.unhash(item.value);
+                unhasher.unhash_hash(item.key);
+                unhasher.unhash_value(item.value, max_depth);
             }
         }
 
-        static void value(BinUnhasher const& unhasher, Link& value) noexcept {
-            unhasher.unhash(value.value);
+        static void value(BinUnhasher const& unhasher, Link& value, int) noexcept {
+            unhasher.unhash_hash(value.value);
         }
 
-        static void value(BinUnhasher const& unhasher, Option& value) noexcept {
+        static void value(BinUnhasher const& unhasher, Option& value, int max_depth) noexcept {
             for (auto& item : value.items) {
-                unhasher.unhash(item.value);
+                unhasher.unhash_value(item.value, max_depth);
             }
         }
 
-        static void value(BinUnhasher const& unhasher, Map& value) noexcept {
+        static void value(BinUnhasher const& unhasher, Map& value, int max_depth) noexcept {
             for (auto& item : value.items) {
-                unhasher.unhash(item.key);
-                unhasher.unhash(item.value);
+                unhasher.unhash_value(item.key, max_depth);
+                unhasher.unhash_value(item.value, max_depth);
             }
         }
 
-        static void value(BinUnhasher const&, Flag const&) noexcept {}
+        static void value(BinUnhasher const&, Flag const&, int) noexcept {}
     };
 
-    void BinUnhasher::unhash(FNV1a& value) const noexcept {
+    void BinUnhasher::unhash_hash(FNV1a& value) const noexcept {
         if (value.str().empty() && value.hash() != 0) {
             if (auto i = fnv1a.find(value.hash()); i != fnv1a.end()) {
                 value = FNV1a(i->second);
@@ -104,7 +104,7 @@ namespace ritobin {
         }
     }
 
-    void BinUnhasher::unhash(XXH64& value) const noexcept {
+    void BinUnhasher::unhash_hash(XXH64& value) const noexcept {
         if (value.str().empty() && value.hash() != 0) {
             if (auto i = xxh64.find(value.hash()); i != xxh64.end()) {
                 value = XXH64(i->second);
@@ -112,15 +112,17 @@ namespace ritobin {
         }
     }
 
-    void BinUnhasher::unhash(Value &value) const noexcept {
-        std::visit([this](auto& value) {
-            BinUnhasherVisit::value(*this, value);
-        }, value);
+    void BinUnhasher::unhash_value(Value &value, int max_depth) const noexcept {
+        if (max_depth > 0) {
+            std::visit([this, max_depth] (auto& value) {
+                BinUnhasherVisit::value(*this, value, max_depth - 1);
+            }, value);
+        }
     }
 
-    void BinUnhasher::unhash(Bin& bin) const noexcept {
+    void BinUnhasher::unhash_bin(Bin& bin, int max_depth) const noexcept {
         for (auto& [key, value] : bin.sections) {
-            unhash(value);
+            unhash_value(value, max_depth);
         }
     }
 

@@ -158,7 +158,7 @@ namespace ritobin {
             writer.write(static_cast<uint16_t>(entryValue.items.size()));
             for (auto const& [name, item] : entryValue.items) {
                 writer.write(name.hash());
-                writer.write(ValueHelper::to_type(item));
+                writer.write(ValueHelper::value_to_type(item));
                 bin_assert(write_value(item));
             }
             writer.write_at(position, writer.position() - position - 4);
@@ -172,7 +172,7 @@ namespace ritobin {
             writer.write(static_cast<uint16_t>(value.items.size()));
             for (auto const& [name, item] : value.items) {
                 writer.write(name.hash());
-                writer.write(ValueHelper::to_type(item));
+                writer.write(ValueHelper::value_to_type(item));
                 bin_assert(write_value(item));
             }
             writer.write_at(position, writer.position() - position - 4);
@@ -189,7 +189,7 @@ namespace ritobin {
             writer.write(static_cast<uint16_t>(value.items.size()));
             for (auto const& [name, item] : value.items) {
                 writer.write(name.hash());
-                writer.write(ValueHelper::to_type(item));
+                writer.write(ValueHelper::value_to_type(item));
                 bin_assert(write_value(item));
             }
             writer.write_at(position, writer.position() - position - 4);

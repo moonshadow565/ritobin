@@ -49,10 +49,10 @@ namespace ritobin {
         VECTOR,
         STRING,
         HASH,
-        LIST_OPTIONAL,
-        LIST_ELEMENT,
-        LIST_PAIR,
-        LIST_FIELD,
+        OPTION,
+        LIST,
+        MAP,
+        CLASS,
     };
 
     constexpr inline auto MAX_PRIMITIVE = Type::FILE;
@@ -80,6 +80,8 @@ namespace ritobin {
             return h;
         }
     public:
+        using storage_t = uint32_t;
+
         inline FNV1a() noexcept = default;
 
         inline FNV1a(std::string str) noexcept : hash_(fnv1a(str)), str_(std::move(str)) {}
@@ -197,6 +199,8 @@ namespace ritobin {
             return xxh64(data.data(), data.size(), seed);
         }
     public:
+        using storage_t = uint64_t;
+
         inline XXH64() noexcept = default;
 
         inline XXH64(std::string str) noexcept : hash_(xxh64(str)), str_(std::move(str)) {}
@@ -248,188 +252,193 @@ namespace ritobin {
         static inline constexpr Type type = Type::BOOL;
         static inline constexpr char type_name[] = "bool";
         static inline constexpr Category category = Category::NUMBER;
-        bool value;
+        bool value = {};
     };
 
     struct I8 {
         static inline constexpr Type type = Type::I8;
         static inline constexpr char type_name[] = "i8";
         static inline constexpr Category category = Category::NUMBER;
-        int8_t value;
+        int8_t value = {};
     };
 
     struct U8 {
         static inline constexpr Type type = Type::U8;
         static inline constexpr char type_name[] = "u8";
         static inline constexpr Category category = Category::NUMBER;
-        uint8_t value;
+        uint8_t value = {};
     };
 
     struct I16 {
         static inline constexpr Type type = Type::I16;
         static inline constexpr char type_name[] = "i16";
         static inline constexpr Category category = Category::NUMBER;
-        int16_t value;
+        int16_t value = {};
     };
 
     struct U16 {
         static inline constexpr Type type = Type::U16;
         static inline constexpr char type_name[] = "u16";
         static inline constexpr Category category = Category::NUMBER;
-        uint16_t value;
+        uint16_t value = {};
     };
 
     struct I32 {
         static inline constexpr Type type = Type::I32;
         static inline constexpr char type_name[] = "i32";
         static inline constexpr Category category = Category::NUMBER;
-        int32_t value;
+        int32_t value = {};
     };
 
     struct U32 {
         static inline constexpr Type type = Type::U32;
         static inline constexpr char type_name[] = "u32";
         static inline constexpr Category category = Category::NUMBER;
-        uint32_t value;
+        uint32_t value = {};
     };
 
     struct I64 {
         static inline constexpr Type type = Type::I64;
         static inline constexpr char type_name[] = "i64";
         static inline constexpr Category category = Category::NUMBER;
-        int64_t value;
+        int64_t value = {};
     };
 
     struct U64 {
         static inline constexpr Type type = Type::U64;
         static inline constexpr char type_name[] = "u64";
         static inline constexpr Category category = Category::NUMBER;
-        uint64_t value;
+        uint64_t value = {};
     };
 
     struct F32 {
         static inline constexpr Type type = Type::F32;
         static inline constexpr char type_name[] = "f32";
         static inline constexpr Category category = Category::NUMBER;
-        float value;
+        float value = {};
     };
 
     struct Vec2 {
         static inline constexpr Type type = Type::VEC2;
         static inline constexpr char type_name[] = "vec2";
         static inline constexpr Category category = Category::VECTOR;
-        std::array<float, 2> value;
+        using item_wrapper_type = F32;
+        std::array<float, 2> value = {};
     };
 
     struct Vec3 {
         static inline constexpr Type type = Type::VEC3;
         static inline constexpr char type_name[] = "vec3";
         static inline constexpr Category category = Category::VECTOR;
-        std::array<float, 3> value;
+        using item_wrapper_type = F32;
+        std::array<float, 3> value = {};
     };
 
     struct Vec4 {
         static inline constexpr Type type = Type::VEC4;
         static inline constexpr char type_name[] = "vec4";
         static inline constexpr Category category = Category::VECTOR;
-        std::array<float, 4> value;
+        using item_wrapper_type = F32;
+        std::array<float, 4> value = {};
     };
 
     struct Mtx44 {
         static inline constexpr Type type = Type::MTX44;
         static inline constexpr char type_name[] = "mtx44";
         static inline constexpr Category category = Category::VECTOR;
-        std::array<float, 16> value;
+        using item_wrapper_type = F32;
+        std::array<float, 16> value = {};
     };
 
     struct RGBA {
         static inline constexpr Type type = Type::RGBA;
         static inline constexpr char type_name[] = "rgba";
         static inline constexpr Category category = Category::VECTOR;
-        std::array<uint8_t, 4> value;
+        using item_wrapper_type = U8;
+        std::array<uint8_t, 4> value = {};
     };
 
     struct String {
         static inline constexpr Type type = Type::STRING;
         static inline constexpr char type_name[] = "string";
         static inline constexpr Category category = Category::STRING;
-        std::string value;
+        std::string value = {};
     };
 
     struct Hash {
         static inline constexpr Type type = Type::HASH;
         static inline constexpr char type_name[] = "hash";
         static inline constexpr Category category = Category::HASH;
-        FNV1a value;
+        FNV1a value = {};
     };
 
     struct File {
         static inline constexpr Type type = Type::FILE;
         static inline constexpr char type_name[] = "file";
         static inline constexpr Category category = Category::HASH;
-        XXH64 value;
+        XXH64 value = {};
     };
 
     struct List {
         static inline constexpr Type type = Type::LIST;
         static inline constexpr char type_name[] = "list";
-        static inline constexpr Category category = Category::LIST_ELEMENT;
-        Type valueType;
-        ElementList items;
+        static inline constexpr Category category = Category::LIST;
+        Type valueType = {};
+        ElementList items = {};
     };
 
     struct List2 {
         static inline constexpr Type type = Type::LIST2;
         static inline constexpr char type_name[] = "list2";
-        static inline constexpr Category category = Category::LIST_ELEMENT;
-        Type valueType;
-        ElementList items;
+        static inline constexpr Category category = Category::LIST;
+        Type valueType = {};
+        ElementList items = {};
     };
 
     struct Pointer {
         static inline constexpr Type type = Type::POINTER;
         static inline constexpr char type_name[] = "pointer";
-        static inline constexpr Category category = Category::LIST_FIELD;
-        FNV1a name;
-        FieldList items;
+        static inline constexpr Category category = Category::CLASS;
+        FNV1a name = {};
+        FieldList items = {};
     };
 
     struct Embed {
         static inline constexpr Type type = Type::EMBED;
         static inline constexpr char type_name[] = "embed";
-        static inline constexpr Category category = Category::LIST_FIELD;
-        FNV1a name;
-        FieldList items;
+        static inline constexpr Category category = Category::CLASS;
+        FNV1a name = {};
+        FieldList items = {};
     };
 
     struct Link {
         static inline constexpr Type type = Type::LINK;
         static inline constexpr char type_name[] = "link";
         static inline constexpr Category category = Category::HASH;
-        FNV1a value;
+        FNV1a value = {};
     };
 
     struct Option {
         static inline constexpr Type type = Type::OPTION;
         static inline constexpr char type_name[] = "option";
-        static inline constexpr Category category = Category::LIST_OPTIONAL;
-        Type valueType;
-        ElementList items;
+        static inline constexpr Category category = Category::OPTION;
+        Type valueType = {};
+        ElementList items = {};
     };
 
     struct Map {
         static inline constexpr Type type = Type::MAP;
         static inline constexpr char type_name[] = "map";
-        static inline constexpr Category category = Category::LIST_PAIR;
-        Type keyType;
-        Type valueType;
-        PairList items;
+        static inline constexpr Category category = Category::MAP;
+        Type keyType = {};
+        Type valueType = {};
+        PairList items = {};
     };
 
     struct Flag {
         static inline constexpr Type type = Type::FLAG;
         static inline constexpr char type_name[] = "flag";
-        bool value;
+        bool value = {};
         static inline constexpr Category category = Category::NUMBER;
     };
 
@@ -464,17 +473,17 @@ namespace ritobin {
     >;
 
     struct Element {
-        Value value;
+        Value value = {};
     };
 
     struct Pair {
-        Value key;
-        Value value;
+        Value key = {};
+        Value value = {};
     };
 
     struct Field {
-        FNV1a key;
-        Value value;
+        FNV1a key = {};
+        Value value = {};
     };
 
     template<typename> struct ValueHelperImpl;
@@ -483,34 +492,40 @@ namespace ritobin {
         using ValuePtr = std::variant<T*...>;
         using ValuePtrConst = std::variant<T const*...>;
 
-        static inline Type to_type(Value const& value) noexcept {
+        static inline Type value_to_type(Value const& value) noexcept {
             return std::visit([](auto&& value) { return value.type; }, value);
         }
 
-        static inline Value from_type(Type type) noexcept {
+        static inline Value type_to_value(Type type) noexcept {
             Value value = None{};
             ((T::type == type ? (value = T{}, true) : false) || ...);
             return value;
         }
 
-        static inline std::string_view to_type_name(Value const& value) noexcept {
+        static inline std::string_view value_to_type_name(Value const& value) noexcept {
             return std::visit([](auto&& value) { return value.type_name; }, value);
         }
 
-        static inline std::string_view to_type_name(Type type) noexcept {
+        static inline std::string_view type_to_type_name(Type type) noexcept {
             std::string_view type_name = {};
             ((T::type == type ? (type_name = T::type_name, true) : false) || ...);
             return type_name;
         }
 
-        static inline Value from_type_name(std::string_view type_name) noexcept {
+        static inline Value type_name_to_value(std::string_view type_name) noexcept {
             Value value = None{};
             ((type_name == T::type_name ? (value = T{}, true) : false) || ...);
             return value;
         }
 
-        static inline bool from_type_name(std::string_view type_name, Type& type) noexcept {
+        static inline bool try_type_name_to_type(std::string_view type_name, Type& type) noexcept {
             return ((type_name == T::type_name ? (type = T::type, true) : false) || ...);
+        }
+
+        static inline Category type_to_category(Type type) noexcept {
+            Category category = Category::NONE;
+            ((type == T::type ? (category = T::category, true) : false) || ...);
+            return category;
         }
     };
 
@@ -536,13 +551,30 @@ namespace ritobin {
         std::unordered_map<uint32_t, std::string> fnv1a;
         std::unordered_map<uint64_t, std::string> xxh64;
 
-        void unhash(Bin& bin) const noexcept;
-        void unhash(Value& bin) const noexcept;
-        void unhash(FNV1a& bin) const noexcept;
-        void unhash(XXH64& bin) const noexcept;
+        void unhash_bin(Bin& bin, int max_depth = 100) const noexcept;
+        void unhash_value(Value& bin, int max_depth) const noexcept;
+        void unhash_hash(FNV1a& bin) const noexcept;
+        void unhash_hash(XXH64& bin) const noexcept;
         bool load_fnv1a_CDTB(std::string const& filename) noexcept;
         bool load_xxh64_CDTB(std::string const& filename) noexcept;
     };
+
+    enum class MorphResult {
+        // Invalid key or value type
+        FAIL = -3,
+        // New value is't fully initialized
+        INCOMPLETE = 2,
+        // New value is intialized but only partially preserves old value
+        LOSSY = -1,
+        // New value is initialized and preserves old value
+        OK = 0,
+        // New value is exactly same as old value
+        UNCHANGED = 1,
+    };
+
+    extern MorphResult morph_value(Value& from, Type intoType);
+    extern MorphResult morph_type_key(Value& value, Type newType);
+    extern MorphResult morph_type_value(Value& value, Type newType);
 }
 
 #endif // RITOBIN_HPP

@@ -27,6 +27,18 @@ namespace ritobin {
             return static_cast<size_t>(cur_ - beg_);
         }
 
+        template<char Symbol>
+        constexpr bool read_symbol() noexcept {
+            while (!is_eof() && one_of<' ', '\t', '\r'>(*cur_)) {
+                cur_++;
+            }
+            if (cur_ != cap_ && *cur_ == Symbol) {
+                cur_++;
+                return true;
+            }
+            return false;
+        }
+
         constexpr bool next_newline() noexcept {
             bool comment = false;
             bool newline = false;
@@ -91,18 +103,6 @@ namespace ritobin {
             }
             if (read_nested_separator()) {
                 end = read_symbol<'}'>();
-                return true;
-            }
-            return false;
-        }
-
-        template<char Symbol>
-        constexpr bool read_symbol() noexcept {
-            while (!is_eof() && one_of<' ', '\t', '\r'>(*cur_)) {
-                cur_++;
-            }
-            if (cur_ != cap_ && *cur_ == Symbol) {
-                cur_++;
                 return true;
             }
             return false;
@@ -317,7 +317,7 @@ namespace ritobin {
             if (name.empty()) {
                 return false;
             }
-            return ValueHelper::from_type_name(name, value);
+            return ValueHelper::try_type_name_to_type(name, value);
         }
 
         template<typename T>
@@ -403,7 +403,7 @@ namespace ritobin {
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else {
-                value = ValueHelper::from_type(type);
+                value = ValueHelper::type_to_value(type);
             }
             return true;
         }
@@ -416,7 +416,7 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto list_item = ValueHelper::from_type(value.valueType);
+                auto list_item = ValueHelper::type_to_value(value.valueType);
                 bin_assert(read_value(list_item));
                 bin_assert(reader.read_nested_separator_or_end(end));
                 value.items.emplace_back(Element{ std::move(list_item) });
@@ -428,7 +428,7 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto list_item = ValueHelper::from_type(value.valueType);
+                auto list_item = ValueHelper::type_to_value(value.valueType);
                 bin_assert(read_value(list_item));
                 bin_assert(reader.read_nested_separator_or_end(end));
                 value.items.emplace_back(Element{ std::move(list_item) });
@@ -440,7 +440,7 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             if (!end) {
-                auto option_item = ValueHelper::from_type(value.valueType);
+                auto option_item = ValueHelper::type_to_value(value.valueType);
                 bin_assert(read_value(option_item));
                 bin_assert(reader.read_nested_separator_or_end(end));
                 bin_assert(end);
@@ -453,8 +453,8 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto map_key = ValueHelper::from_type(value.keyType);
-                auto map_value = ValueHelper::from_type(value.valueType);
+                auto map_key = ValueHelper::type_to_value(value.keyType);
+                auto map_value = ValueHelper::type_to_value(value.valueType);
                 bin_assert(read_value(map_key));
                 bin_assert(reader.read_symbol<'='>());
                 bin_assert(read_value(map_value));

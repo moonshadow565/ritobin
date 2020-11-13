@@ -82,7 +82,7 @@ namespace ritobin {
         }
     
         void write(Type type) noexcept {
-            write_raw(ValueHelper::to_type_name(type));
+            write_raw(ValueHelper::type_to_type_name(type));
         }
 
         void write(std::string_view str) noexcept {

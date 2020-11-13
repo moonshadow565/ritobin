@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     try {
         ritobin::Bin bin = {};
         bin.read_binary_file(infile.string());
-        unhasher.unhash(bin);
+        unhasher.unhash_bin(bin);
         bin.write_text_file(outfile.string(), 4);
         return 0;
     } catch(std::runtime_error const& err) {
@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
         fputs(err.what(), stderr);
         if (argc < 3) { 
             fputs("Press enter to continue...", stderr);
-            int c = getc(stdin);
+            [[maybe_unused]] int c = getc(stdin);
         }
         return -1;
     }

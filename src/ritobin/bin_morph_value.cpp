@@ -1,5 +1,6 @@
-#include "bin.hpp"
-#include "numconv.hpp"
+#include "bin_morph.hpp"
+#include "bin_numconv.hpp"
+#include "bin_types_helper.hpp"
 #include <limits>
 
 namespace ritobin {

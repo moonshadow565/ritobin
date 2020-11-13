@@ -1,4 +1,5 @@
-#include "bin.hpp"
+#include "bin_morph.hpp"
+#include "bin_types_helper.hpp"
 
 namespace ritobin {
     // Conversion spectialization struct
@@ -59,7 +60,7 @@ namespace ritobin {
         static MorphResult morph(T& value, Type newType) {
             if (value.keyType == newType) {
                 return MorphResult::UNCHANGED;
-            } else if (!is_primitive(newType)) {
+            } else if (!ValueHelper::is_primitive(newType)) {
                 return MorphResult::FAIL;
             } else {
                 value.keyType = newType;

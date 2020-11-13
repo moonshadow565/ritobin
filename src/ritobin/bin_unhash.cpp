@@ -1,8 +1,7 @@
-#include <stdexcept>
 #include <fstream>
 #include <charconv>
 #include <string>
-#include "bin.hpp"
+#include "bin_unhash.hpp"
 
 namespace ritobin {
     struct BinUnhasherVisit {
@@ -126,13 +125,12 @@ namespace ritobin {
         }
     }
 
-    bool BinUnhasher::load_fnv1a_CDTB(std::string const& filename) noexcept {
-        auto file = std::ifstream{ filename };
-        if (!file) {
+    bool BinUnhasher::load_fnv1a_CDTB(std::istream& istream) noexcept {
+        if (!istream) {
             return false;
         }
         auto line = std::string{};
-        while (std::getline(file, line)) {
+        while (std::getline(istream, line)) {
             if (line.empty()) {
                 break;
             }
@@ -148,13 +146,12 @@ namespace ritobin {
         return true;
     }
 
-    bool BinUnhasher::load_xxh64_CDTB(std::string const& filename) noexcept {
-        auto file = std::ifstream{ filename };
-        if (!file) {
+    bool BinUnhasher::load_xxh64_CDTB(std::istream& istream) noexcept {
+        if (!istream) {
             return false;
         }
         auto line = std::string{};
-        while (std::getline(file, line)) {
+        while (std::getline(istream, line)) {
             if (line.empty()) {
                 break;
             }

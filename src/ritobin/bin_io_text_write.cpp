@@ -1,19 +1,19 @@
-#include <stdexcept>
-#include "numconv.hpp"
-#include "bin.hpp"
+#include "bin_io.hpp"
+#include "bin_types_helper.hpp"
+#include "bin_numconv.hpp"
 
-namespace ritobin {
+namespace ritobin::io::text_write_impl {
     struct TextWriter {
         std::vector<char>& buffer_;
-        size_t ident_size_ = 2;
+        size_t indent_size_ = 2;
         size_t ident_ = {};
 
         inline void ident_inc() noexcept {
-            ident_ += ident_size_;
+            ident_ += indent_size_;
         }
 
         inline void ident_dec() noexcept {
-            ident_ -= ident_size_;
+            ident_ -= indent_size_;
         }
 
         void pad() {
@@ -161,86 +161,73 @@ namespace ritobin {
     };
 
     struct BinTextWriter {
-        Bin const& bin;
         TextWriter writer;
 
-        bool process() noexcept {
+        bool process_bin(Bin const& bin) noexcept {
             writer.buffer_.clear();
             writer.write_raw("#PROP_text\n");
-            write_sections();
-            return true;
-        }
-    private:
-        void write_sections() noexcept {
             for (auto const& section : bin.sections) {
                 write_section(section);
             }
+            return true;
         }
 
-        void write_section(std::pair<std::string_view,Value> const& section) {
-            auto const& [name, value] = section;
-            writer.write_raw(name);
-            writer.write_raw(": ");
-            write_type(value);
-            writer.write_raw(" = ");
+        bool process_value(Value const& value) noexcept {
             write_value(value);
+            return true;
+        }
+
+        template <typename T>
+        bool process_list(std::span<T const> list) noexcept {
+            for (auto const& item: list) {
+                write_item(item);
+            }
+            return true;
+        }
+    private:
+        void write_section(std::pair<std::string_view, Value> const& section) {
+            writer.write_raw(section.first);
+            writer.write_raw(": ");
+            write_type(section.second);
+            writer.write_raw(" = ");
+            write_value(section.second);
             writer.write_raw("\n");
         }
 
-        void write_items(ElementList const& items) noexcept {
-            if (items.empty()) {
-                writer.write_raw("{}");
-                return;
-            }
-
-            writer.write_raw("{\n");
-            writer.ident_inc();
-            for (auto const& [value] : items) {
-                writer.pad();
-                write_value(value);
-                writer.write_raw("\n");
-            }
-            writer.ident_dec();
+        void write_item(Field const& item) {
             writer.pad();
-            writer.write_raw("}");
+            writer.write_name(item.key);
+            writer.write_raw(": ");
+            write_type(item.value);
+            writer.write_raw(" = ");
+            write_value(item.value);
+            writer.write_raw("\n");
         }
 
-        void write_items(PairList const& items) noexcept {
-            if (items.empty()) {
-                writer.write_raw("{}");
-                return;
-            }
-
-            writer.write_raw("{\n");
-            writer.ident_inc();
-            for (auto const& [key, value] : items) {
-                writer.pad();
-                write_value(key);
-                writer.write_raw(" = ");
-                write_value(value);
-                writer.write_raw("\n");
-            }
-            writer.ident_dec();
+        void write_item(Element const& item) {
             writer.pad();
-            writer.write_raw("}");
+            write_value(item.value);
+            writer.write_raw("\n");
         }
 
-        void write_items(FieldList const& items) noexcept {
+        void write_item(Pair const& item) {
+            writer.pad();
+            write_value(item.key);
+            writer.write_raw(" = ");
+            write_value(item.value);
+            writer.write_raw("\n");
+        }
+
+        template <typename T>
+        void write_items(T const& items) noexcept {
             if (items.empty()) {
                 writer.write_raw("{}");
                 return;
             }
-
             writer.write_raw("{\n");
             writer.ident_inc();
-            for (auto const& [key, value] : items) {
-                writer.pad();
-                writer.write_name(key);
-                writer.write_raw(": ");
-                write_type(value);
-                writer.write_raw(" = ");
-                write_value(value);
-                writer.write_raw("\n");
+            for (auto const& item : items) {
+                write_item(item);
             }
             writer.ident_dec();
             writer.pad();
@@ -354,10 +341,22 @@ namespace ritobin {
                 write_value_visit(value);
             }, value);
         }
-    };
 
-    void Bin::write_text(std::vector<char>& out, size_t ident_size) const {
-        BinTextWriter writer = { *this, { out, ident_size } };
-        writer.process();
+    public:
+        std::string trace_error() {
+            return "Something went wrong!";
+        }
+    };
+}
+
+namespace ritobin::io {
+    using namespace text_write_impl;
+
+    std::string write_text(Bin const& bin, std::vector<char>& out, size_t indent_size) noexcept {
+        BinTextWriter writer = { { out, indent_size } };
+        if (!writer.process_bin(bin)) {
+            return writer.trace_error();
+        }
+        return {};
     }
 }

@@ -1,9 +1,13 @@
-#include <stdexcept>
-#include "bin.hpp"
-#include "numconv.hpp"
+#include "bin_io.hpp"
+#include "bin_types_helper.hpp"
+#include "bin_numconv.hpp"
 
+#define bin_assert(...) do { \
+    if(auto start = reader.cur_; !(__VA_ARGS__)) { \
+        return fail_msg(#__VA_ARGS__, start); \
+    } } while(false)
 
-namespace ritobin {
+namespace ritobin::io::impl_text_read {
     struct TextReader {
         char const* const beg_ = nullptr;
         char const* cur_ = nullptr;
@@ -103,6 +107,16 @@ namespace ritobin {
             }
             if (read_nested_separator()) {
                 end = read_symbol<'}'>();
+                return true;
+            }
+            return false;
+        }
+
+        constexpr bool read_nested_separator_or_eof() noexcept {
+            if (is_eof()) {
+                return true;
+            }
+            if (read_nested_separator()) {
                 return true;
             }
             return false;
@@ -332,26 +346,10 @@ namespace ritobin {
     };
 
     struct BinTextReader {
-        Bin& bin;
         TextReader reader;
         std::vector<std::pair<std::string, char const*>> error;
 
-        #define bin_assert(...) do { \
-            if(auto start = reader.cur_; !(__VA_ARGS__)) { \
-                return fail_msg(#__VA_ARGS__, start); \
-            } } while(false)
-
-        bool process() noexcept {
-            bin_assert(read_sections());
-            return true;
-        }
-    private:
-        bool fail_msg(char const* msg, char const* pos) noexcept {
-            error.emplace_back(msg, pos);
-            return false;
-        }
-
-        bool read_sections() noexcept {
+        bool process_bin(Bin& bin) noexcept {
             reader.next_newline();
             while (!reader.is_eof()) {
                 std::string section_name = {};
@@ -365,46 +363,107 @@ namespace ritobin {
             }
             return true;
         }
+
+        bool process_value(Value& value) noexcept {
+            reader.next_newline();
+            bin_assert(read_value(value));
+            return true;
+        }
+
+        bool process_list_fields(FieldList& list) noexcept {
+            reader.next_newline();
+            while (!reader.is_eof()) {
+                bin_assert(read_field(list));
+                bin_assert(reader.read_nested_separator_or_eof());
+            }
+            return true;
+        }
+
+        bool process_list_elements(ElementList& list, Type valueType) noexcept {
+            reader.next_newline();
+            while (!reader.is_eof()) {
+                bin_assert(read_element(list, valueType));
+                bin_assert(reader.read_nested_separator_or_eof());
+            }
+            return true;
+        }
+
+        bool process_list_pairs(PairList& list, Type keyType, Type valueType) noexcept {
+            reader.next_newline();
+            while (!reader.is_eof()) {
+                bin_assert(read_pair(list, keyType, valueType));
+                bin_assert(reader.read_nested_separator_or_eof());
+            }
+            return true;
+        }
+    private:
+        bool fail_msg(char const* msg, char const* pos) noexcept {
+            error.emplace_back(msg, pos);
+            return false;
+        }
     
         bool read_value_type(Value& value) noexcept {
             Type type = {};
             bin_assert(reader.read_symbol<':'>());
             bin_assert(reader.read_typename(type));
-            // TODO: do we need any checks on type here?
-
             if (type == Type::LIST) {
                 List result = {};
                 bin_assert(reader.read_symbol<'['>());
                 bin_assert(reader.read_typename(result.valueType));
-                bin_assert(!is_container(result.valueType));
+                bin_assert(!ValueHelper::is_container(result.valueType));
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else if (type == Type::LIST2) {
                 List2 result = {};
                 bin_assert(reader.read_symbol<'['>());
                 bin_assert(reader.read_typename(result.valueType));
-                bin_assert(!is_container(result.valueType));
+                bin_assert(!ValueHelper::is_container(result.valueType));
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else if (type == Type::OPTION) {
                 Option result = {};
                 bin_assert(reader.read_symbol<'['>());
                 bin_assert(reader.read_typename(result.valueType));
-                bin_assert(!is_container(result.valueType));
+                bin_assert(!ValueHelper::is_container(result.valueType));
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else if (type == Type::MAP) {
                 Map result = {};
                 bin_assert(reader.read_symbol<'['>());
                 bin_assert(reader.read_typename(result.keyType));
+                bin_assert(ValueHelper::is_primitive(result.keyType));
                 bin_assert(reader.read_symbol<','>());
                 bin_assert(reader.read_typename(result.valueType));
-                bin_assert(!is_container(result.valueType));
+                bin_assert(!ValueHelper::is_container(result.valueType));
                 bin_assert(reader.read_symbol<']'>());
                 value = result;
             } else {
                 value = ValueHelper::type_to_value(type);
             }
+            return true;
+        }
+
+        bool read_field(FieldList& list) noexcept {
+            auto& item = list.emplace_back();
+            bin_assert(reader.read_hash_name(item.key));
+            bin_assert(read_value_type(item.value));
+            bin_assert(reader.read_symbol<'='>());
+            bin_assert(read_value(item.value));
+            return true;
+        }
+
+        bool read_element(ElementList& list, Type valueType) noexcept {
+            auto& item = list.emplace_back(ValueHelper::type_to_value(valueType));
+            bin_assert(read_value(item.value));
+            return true;
+        }
+
+        bool read_pair(PairList& list, Type keyType, Type valueType) noexcept {
+            auto& item = list.emplace_back(ValueHelper::type_to_value(keyType),
+                                           ValueHelper::type_to_value(valueType));
+            bin_assert(read_value(item.key));
+            bin_assert(reader.read_symbol<'='>());
+            bin_assert(read_value(item.value));
             return true;
         }
 
@@ -416,10 +475,8 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto list_item = ValueHelper::type_to_value(value.valueType);
-                bin_assert(read_value(list_item));
+                bin_assert(read_element(value.items, value.valueType));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Element{ std::move(list_item) });
             }
             return true;
         }
@@ -428,10 +485,8 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto list_item = ValueHelper::type_to_value(value.valueType);
-                bin_assert(read_value(list_item));
+                bin_assert(read_element(value.items, value.valueType));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Element{ std::move(list_item) });
             }
             return true;
         }
@@ -440,11 +495,9 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             if (!end) {
-                auto option_item = ValueHelper::type_to_value(value.valueType);
-                bin_assert(read_value(option_item));
+                bin_assert(read_element(value.items, value.valueType));
                 bin_assert(reader.read_nested_separator_or_end(end));
                 bin_assert(end);
-                value.items.emplace_back(Element{ std::move(option_item) });
             }
             return true;
         }
@@ -453,13 +506,8 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                auto map_key = ValueHelper::type_to_value(value.keyType);
-                auto map_value = ValueHelper::type_to_value(value.valueType);
-                bin_assert(read_value(map_key));
-                bin_assert(reader.read_symbol<'='>());
-                bin_assert(read_value(map_value));
+                bin_assert(read_pair(value.items, value.keyType, value.valueType));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Pair{ std::move(map_key), std::move(map_value) });
             }
             return true;
         }
@@ -469,14 +517,8 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                FNV1a field_name = {};
-                Value field_value = {};
-                bin_assert(reader.read_hash_name(field_name));
-                bin_assert(read_value_type(field_value));
-                bin_assert(reader.read_symbol<'='>());
-                bin_assert(read_value(field_value));
+                bin_assert(read_field(value.items));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Field{ std::move(field_name), std::move(field_value) });
             }
             return true;
         }
@@ -490,14 +532,8 @@ namespace ritobin {
             bool end = false;
             bin_assert(reader.read_nested_begin(end));
             while (!end) {
-                FNV1a field_name = {};
-                Value field_value = {};
-                bin_assert(reader.read_hash_name(field_name));
-                bin_assert(read_value_type(field_value));
-                bin_assert(reader.read_symbol<'='>());
-                bin_assert(read_value(field_value));
+                bin_assert(read_field(value.items));
                 bin_assert(reader.read_nested_separator_or_end(end));
-                value.items.emplace_back(Field{ std::move(field_name), std::move(field_value) });
             }
             return true;
         }
@@ -584,14 +620,12 @@ namespace ritobin {
             bin_assert(counter == static_cast<uint32_t>(S));
             return true;
         }
-    };
 
-    void Bin::read_text(char const* data, size_t size) {
-        BinTextReader reader = { *this, { data, data, data + size }, {} };
-        if (!reader.process()) {
-            auto iter = data;
+    public:
+        std::string trace_error() noexcept {
+            auto iter = reader.beg_;
+            auto line_start = reader.beg_;
             size_t line_number = 1;
-            auto line_start = data;
             auto get_column = [&iter, &line_number, &line_start](char const* end) noexcept {
                 while(iter != end) {
                     if(*iter == '\n') {
@@ -605,23 +639,77 @@ namespace ritobin {
                 return end - line_start;
             };
 
-            std::string error;
-            for(auto e = reader.error.crbegin(); e != reader.error.crend(); e++) {
-                error.append(e->first);
-                error.append(" @ line: ");
+            std::string trace;
+            for(auto e = error.crbegin(); e != error.crend(); e++) {
+                trace.append(e->first);
+                trace.append(" @ line: ");
                 auto column_number = get_column(e->second);
-                error.append(std::to_string(line_number));
-                error.append(", column: ");
-                error.append(std::to_string(column_number));
-                error.append("\n");
+                trace.append(std::to_string(line_number));
+                trace.append(", column: ");
+                trace.append(std::to_string(column_number));
+                trace.append("\n");
             }
-            error.append("Last position @ line: ");
-            auto column_number = get_column(reader.reader.cur_);
-            error.append(std::to_string(line_number));
-            error.append(", column: ");
-            error.append(std::to_string(column_number));
-            error.append("\n");
-            throw std::runtime_error(std::move(error));
+            trace.append("Last position @ line: ");
+            auto column_number = get_column(reader.cur_);
+            trace.append(std::to_string(line_number));
+            trace.append(", column: ");
+            trace.append(std::to_string(column_number));
+            trace.append("\n");
+            return trace;
         }
+    };
+}
+
+namespace ritobin::io {
+    using namespace impl_text_read;
+
+    std::string read_text(Bin& bin, std::span<char const> data) noexcept {
+        auto const begin = data.data();
+        auto const end = data.data() + data.size();
+        BinTextReader reader = { { begin, begin, end }, {} };
+        if (!reader.process_bin(bin)) {
+            return reader.trace_error();
+        }
+        return {};
+    }
+
+    std::string read_text(Value& value, std::span<char const> data) noexcept {
+        auto const begin = data.data();
+        auto const end = data.data() + data.size();
+        BinTextReader reader = { { begin, begin, end }, {} };
+        if (!reader.process_value(value)) {
+            return reader.trace_error();
+        }
+        return {};
+    }
+
+    std::string read_text(FieldList& list, std::span<char const> data) noexcept {
+        auto const begin = data.data();
+        auto const end = data.data() + data.size();
+        BinTextReader reader = { { begin, begin, end }, {} };
+        if (!reader.process_list_fields(list)) {
+            return reader.trace_error();
+        }
+        return {};
+    }
+
+    std::string read_text(ElementList& list, Type valueType, std::span<char const> data) noexcept {
+        auto const begin = data.data();
+        auto const end = data.data() + data.size();
+        BinTextReader reader = { { begin, begin, end }, {} };
+        if (!reader.process_list_elements(list, valueType)) {
+            return reader.trace_error();
+        }
+        return {};
+    }
+
+    std::string read_text(PairList& list, Type keyType, Type valueType, std::span<char const> data) noexcept {
+        auto const begin = data.data();
+        auto const end = data.data() + data.size();
+        BinTextReader reader = { { begin, begin, end }, {} };
+        if (!reader.process_list_pairs(list, keyType, valueType)) {
+            return reader.trace_error();
+        }
+        return {};
     }
 }

@@ -1,11 +1,17 @@
-#include <stdexcept>
-#include "bin.hpp"
+#include "bin_io.hpp"
+#include "bin_types_helper.hpp"
 
-namespace ritobin {
+#define bin_assert(...) do { \
+    if (auto start = reader.cur_; !(__VA_ARGS__)) { \
+        return fail_msg(#__VA_ARGS__, start); \
+    } } while(false)
+
+namespace ritobin::io::impl_binary_read {
     struct BinaryReader {
         char const* const beg_;
         char const* cur_;
         char const* const cap_;
+        BinCompat const* const compat_;
 
         inline constexpr size_t position() const noexcept {
             return cur_ - beg_;
@@ -63,8 +69,7 @@ namespace ritobin {
             if (!read(raw)) {
                 return false;
             }
-            value = static_cast<Type>(raw);
-            return is_primitive(value) ? value <= MAX_PRIMITIVE : value <= MAX_COMPLEX;
+            return compat_->raw_to_type(raw, value);
         }
 
         bool read(FNV1a& value) noexcept {
@@ -91,16 +96,12 @@ namespace ritobin {
         BinaryReader reader;
         std::vector<std::pair<std::string, char const*>> error;
 
-        #define bin_assert(...) do { \
-            if(auto start = reader.cur_; !(__VA_ARGS__)) { \
-                return fail_msg(#__VA_ARGS__, start); \
-            } } while(false)
-
         bool process() noexcept {
             bin.sections.clear();
             bin_assert(read_sections());
             return true;
         }
+
     private:
         bool fail_msg(char const* msg, char const* pos) noexcept {
             error.emplace_back(msg, pos);
@@ -232,7 +233,7 @@ namespace ritobin {
         bool read_value_visit(Option& value) noexcept {
             uint8_t count = 0;
             bin_assert(reader.read(value.valueType));
-            bin_assert(!is_container(value.valueType));
+            bin_assert(!ValueHelper::is_container(value.valueType));
             bin_assert(reader.read(count));
             if (count != 0) {
                 auto& [item] = value.items.emplace_back();
@@ -245,7 +246,7 @@ namespace ritobin {
             uint32_t size = 0;
             uint32_t count = 0;
             bin_assert(reader.read(value.valueType));
-            bin_assert(!is_container(value.valueType));
+            bin_assert(!ValueHelper::is_container(value.valueType));
             bin_assert(reader.read(size));
             size_t position = reader.position();
             bin_assert(reader.read(count));
@@ -261,7 +262,7 @@ namespace ritobin {
             uint32_t size = 0;
             uint32_t count = 0;
             bin_assert(reader.read(value.valueType));
-            bin_assert(!is_container(value.valueType));
+            bin_assert(!ValueHelper::is_container(value.valueType));
             bin_assert(reader.read(size));
             size_t position = reader.position();
             bin_assert(reader.read(count));
@@ -277,9 +278,9 @@ namespace ritobin {
             uint32_t size = 0;
             uint32_t count = 0;
             bin_assert(reader.read(value.keyType));
-            bin_assert(is_primitive(value.keyType));
+            bin_assert(ValueHelper::is_primitive(value.keyType));
             bin_assert(reader.read(value.valueType));
-            bin_assert(!is_container(value.valueType));
+            bin_assert(!ValueHelper::is_container(value.valueType));
             bin_assert(reader.read(size));
             size_t position = reader.position();
             bin_assert(reader.read(count));
@@ -297,20 +298,30 @@ namespace ritobin {
             bin_assert(reader.read(value.value));
             return true;
         }
-#undef bin_assert
-    };
-
-    void Bin::read_binary(char const* data, size_t size) {
-        BinBinaryReader reader = { *this, { data, data, data + size }, {} };
-        if (!reader.process()) {
-            std::string error;
-            for(auto e = reader.error.crbegin(); e != reader.error.crend(); e++) {
-                error.append(e->first);
-                error.append(" @ ");
-                error.append(std::to_string(data - e->second));
-                error.append("\n");
+    public:
+        std::string trace_error() noexcept {
+            std::string trace;
+            for(auto e = error.crbegin(); e != error.crend(); e++) {
+                trace.append(e->first);
+                trace.append(" @ ");
+                trace.append(std::to_string(reader.beg_ - e->second));
+                trace.append("\n");
             }
-            throw std::runtime_error(std::move(error));
+            return trace;
         }
+    };
+}
+
+namespace ritobin::io {
+    using namespace impl_binary_read;
+
+    std::string read_binary(Bin& value, std::span<char const> data, BinCompat const* compat) noexcept {
+        auto const begin = data.data();
+        auto const end = data.data() + data.size();
+        BinBinaryReader reader = { value, { begin, begin, end, compat }, {} };
+        if (!reader.process()) {
+            return reader.trace_error();
+        }
+        return {};
     }
 }

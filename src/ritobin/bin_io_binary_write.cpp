@@ -1,10 +1,17 @@
-#include <stdexcept>
-#include "bin.hpp"
+#include "bin_io.hpp"
+#include "bin_types_helper.hpp"
+#include "bin_numconv.hpp"
+
+#define bin_assert(...) do { \
+    if(!(__VA_ARGS__)) { \
+        return fail_msg(#__VA_ARGS__ "\n"); \
+    } } while(false)
 
 
-namespace ritobin {
+namespace ritobin::io::impl_binary_write {
     struct BinaryWriter {
         std::vector<char>& buffer_;
+        BinCompat const* const compat_;
 
         bool write_at(size_t offset, size_t value) noexcept {
             auto const tmp = static_cast<uint32_t>(value);
@@ -41,20 +48,21 @@ namespace ritobin {
             write(static_cast<uint8_t>(value));
         }
 
-        void write(Type type) noexcept {
-            write(static_cast<uint8_t>(type));
+        [[nodiscard]] bool write(Type type) noexcept {
+            uint8_t raw = 0;
+            return compat_->type_to_raw(type, raw);
         }
 
-        void write(std::string const& value) {
+        void write(std::string const& value) noexcept {
             write(static_cast<uint16_t>(value.size()));
             buffer_.insert(buffer_.end(), value.data(), value.data() + value.size());
         }
 
-        void write(FNV1a const& value) {
+        void write(FNV1a const& value) noexcept {
             write(value.hash());
         }
 
-        void write(XXH64 const& value) {
+        void write(XXH64 const& value) noexcept {
             write(value.hash());
         }
 
@@ -64,29 +72,24 @@ namespace ritobin {
     };
 
     struct BinBinaryWriter {
-        Bin const& bin;
         BinaryWriter writer;
         std::vector<std::string> error;
 
-        #define bin_assert(...) do { \
-            if(!(__VA_ARGS__)) { \
-                return fail_msg(#__VA_ARGS__ "\n"); \
-            } } while(false)
-
-        bool process() noexcept {
+        bool process(Bin const& bin) noexcept {
             error.clear();
             writer.buffer_.clear();
-            bin_assert(write_header());
-            bin_assert(write_entries());
+            bin_assert(write_header(bin));
+            bin_assert(write_entries(bin));
             return true;
         }
+
     private:
         bool fail_msg(char const* msg) noexcept {
             error.emplace_back(msg);
             return false;
         }
 
-        bool write_header() noexcept {
+        bool write_header(Bin const& bin) noexcept {
             auto type_section = bin.sections.find("type");
             bin_assert(type_section != bin.sections.end());
             auto type = std::get_if<String>(&type_section->second);
@@ -124,7 +127,7 @@ namespace ritobin {
             return true;
         }
     
-        bool write_entries() noexcept {
+        bool write_entries(Bin const& bin) noexcept {
             auto entries_section = bin.sections.find("entries");
             bin_assert(entries_section != bin.sections.end());
             auto entries = std::get_if<Map>(&entries_section->second);
@@ -158,7 +161,7 @@ namespace ritobin {
             writer.write(static_cast<uint16_t>(entryValue.items.size()));
             for (auto const& [name, item] : entryValue.items) {
                 writer.write(name.hash());
-                writer.write(ValueHelper::value_to_type(item));
+                bin_assert(writer.write(ValueHelper::value_to_type(item)));
                 bin_assert(write_value(item));
             }
             writer.write_at(position, writer.position() - position - 4);
@@ -172,7 +175,7 @@ namespace ritobin {
             writer.write(static_cast<uint16_t>(value.items.size()));
             for (auto const& [name, item] : value.items) {
                 writer.write(name.hash());
-                writer.write(ValueHelper::value_to_type(item));
+                bin_assert(writer.write(ValueHelper::value_to_type(item)));
                 bin_assert(write_value(item));
             }
             writer.write_at(position, writer.position() - position - 4);
@@ -189,7 +192,7 @@ namespace ritobin {
             writer.write(static_cast<uint16_t>(value.items.size()));
             for (auto const& [name, item] : value.items) {
                 writer.write(name.hash());
-                writer.write(ValueHelper::value_to_type(item));
+                bin_assert(writer.write(ValueHelper::value_to_type(item)));
                 bin_assert(write_value(item));
             }
             writer.write_at(position, writer.position() - position - 4);
@@ -197,8 +200,8 @@ namespace ritobin {
         }
 
         bool write_value_visit(List const& value) noexcept {
-            bin_assert(!is_container(value.valueType));
-            writer.write(value.valueType);
+            bin_assert(!ValueHelper::is_container(value.valueType));
+            bin_assert(writer.write(value.valueType));
             size_t position = writer.position();
             writer.write(uint32_t{ 0 });
             writer.write(static_cast<uint32_t>(value.items.size()));
@@ -210,8 +213,8 @@ namespace ritobin {
         }
 
         bool write_value_visit(List2 const& value) noexcept {
-            bin_assert(!is_container(value.valueType));
-            writer.write(value.valueType);
+            bin_assert(!ValueHelper::is_container(value.valueType));
+            bin_assert(writer.write(value.valueType));
             size_t position = writer.position();
             writer.write(uint32_t{ 0 });
             writer.write(static_cast<uint32_t>(value.items.size()));
@@ -223,10 +226,10 @@ namespace ritobin {
         }
 
         bool write_value_visit(Map const& value) noexcept {
-            bin_assert(is_primitive(value.keyType));
-            bin_assert(!is_container(value.valueType));
-            writer.write(value.keyType);
-            writer.write(value.valueType);
+            bin_assert(ValueHelper::is_primitive(value.keyType));
+            bin_assert(!ValueHelper::is_container(value.valueType));
+            bin_assert(writer.write(value.keyType));
+            bin_assert(writer.write(value.valueType));
             size_t position = writer.position();
             writer.write(uint32_t{ 0 });
             writer.write(static_cast<uint32_t>(value.items.size()));
@@ -239,11 +242,9 @@ namespace ritobin {
         }
 
         bool write_value_visit(Option const& value) noexcept {
-            bin_assert(value.valueType != Type::MAP);
-            bin_assert(value.valueType != Type::LIST);
-            bin_assert(value.valueType != Type::OPTION);
+            bin_assert(!ValueHelper::is_container(value.valueType));
             bin_assert(value.items.size() <= 1);
-            writer.write(value.valueType);
+            bin_assert(writer.write(value.valueType));
             writer.write(static_cast<uint8_t>(value.items.size()));
             for (auto const& [item] : value.items) {
                 bin_assert(write_value(item, value.valueType));
@@ -273,16 +274,25 @@ namespace ritobin {
                 return write_value_visit(value);
                 }, value);
         }
-    };
-
-    void Bin::write_binary(std::vector<char>& out) const {
-        BinBinaryWriter writer = { *this, { out }, {} };
-        if (!writer.process()) {
-            std::string error;
-            for(auto e = writer.error.crbegin(); e != writer.error.crend(); e++) {
-                error.append(*e);
+    public:
+        std::string trace_error() noexcept {
+            std::string trace;
+            for(auto e = error.crbegin(); e != error.crend(); e++) {
+                trace.append(*e);
             }
-            throw std::runtime_error(std::move(error));
+            return trace;
         }
+    };
+}
+
+namespace ritobin::io {
+    using namespace impl_binary_write;
+
+    std::string write_binary(Bin const& bin, std::vector<char>& out, BinCompat const* compat) noexcept {
+        BinBinaryWriter writer = { { out, compat }, {} };
+        if (!writer.process(bin)) {
+            return writer.trace_error();
+        }
+        return {};
     }
 }

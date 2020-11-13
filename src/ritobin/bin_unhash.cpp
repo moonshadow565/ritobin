@@ -146,6 +146,11 @@ namespace ritobin {
         return true;
     }
 
+    bool BinUnhasher::load_fnv1a_CDTB(std::string const& filename) noexcept {
+        std::ifstream file(filename);
+        return load_fnv1a_CDTB(file);
+    }
+
     bool BinUnhasher::load_xxh64_CDTB(std::istream& istream) noexcept {
         if (!istream) {
             return false;
@@ -165,5 +170,10 @@ namespace ritobin {
             }
         }
         return true;
+    }
+
+    bool BinUnhasher::load_xxh64_CDTB(std::string const& filename) noexcept {
+        std::ifstream file(filename);
+        return load_xxh64_CDTB(file);
     }
 }

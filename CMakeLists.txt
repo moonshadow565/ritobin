@@ -31,3 +31,6 @@ add_library(ritobin_lib STATIC
     src/ritobin/bin_unhash.cpp
 )
 target_include_directories(ritobin_lib PUBLIC src/)
+
+add_executable(ritobin src/main.cpp src/argparse.hpp)
+target_link_libraries(ritobin PRIVATE ritobin_lib)

@@ -50,7 +50,12 @@ namespace ritobin::io::impl_binary_write {
 
         [[nodiscard]] bool write(Type type) noexcept {
             uint8_t raw = 0;
-            return compat_->type_to_raw(type, raw);
+            if (compat_->type_to_raw(type, raw)) {
+                write(raw);
+                return true;
+            } else {
+                return false;
+            }
         }
 
         void write(std::string const& value) noexcept {

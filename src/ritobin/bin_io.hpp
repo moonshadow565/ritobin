@@ -9,7 +9,19 @@ namespace ritobin::io {
         virtual char const* name() const noexcept = 0;
         [[nodiscard]] virtual bool type_to_raw(Type type, uint8_t& raw) const noexcept = 0;
         [[nodiscard]] virtual bool raw_to_type(uint8_t raw, Type& type) const noexcept = 0;
+
+        static std::span<BinCompat const* const> list() noexcept;
         static BinCompat const* get(std::string_view name) noexcept;
+    };
+
+    struct DynamicFormat {
+        virtual char const* name() const noexcept = 0;
+        virtual bool output_allways_hashed() const noexcept = 0;
+        virtual std::string read(ritobin::Bin& bin, std::span<char const> data) const = 0;
+        virtual std::string write(ritobin::Bin const& bin, std::vector<char>& data) const = 0;
+
+        static std::span<DynamicFormat const* const> list() noexcept;
+        static DynamicFormat const* get(std::string_view name) noexcept;
     };
 
     // Read .bin files

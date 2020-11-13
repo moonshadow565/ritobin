@@ -14,7 +14,9 @@ namespace ritobin {
         void unhash_hash(FNV1a& bin) const noexcept;
         void unhash_hash(XXH64& bin) const noexcept;
         bool load_fnv1a_CDTB(std::istream& istream) noexcept;
+        bool load_fnv1a_CDTB(std::string const& filename) noexcept;
         bool load_xxh64_CDTB(std::istream& istream) noexcept;
+        bool load_xxh64_CDTB(std::string const& filename) noexcept;
     };
 }
 

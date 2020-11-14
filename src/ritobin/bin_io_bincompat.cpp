@@ -28,7 +28,7 @@ namespace ritobin::io::compat_impl {
         }
     } compat_bin_latest = {};
 
-    constinit static BinCompat const* bin_versions[] = {
+    static BinCompat const* bin_versions[] = {
         &compat_bin_latest
     };
 }
@@ -38,8 +38,14 @@ namespace ritobin::io::dynamic_format_impl {
 
     template <size_t I>
     struct BinFormat : DynamicFormat {
-        char const* name() const noexcept override {
+        std::string_view name() const noexcept override {
             return bin_versions[I]->name();
+        }
+        std::string_view oposite_name() const noexcept override {
+            return "text";
+        }
+        std::string_view default_extension() const noexcept override {
+            return ".bin";
         }
         bool output_allways_hashed() const noexcept override {
             return true;
@@ -50,13 +56,28 @@ namespace ritobin::io::dynamic_format_impl {
         std::string write(const Bin &bin, std::vector<char> &data) const override {
             return write_binary(bin, data, bin_versions[I]);
         }
+        bool try_guess(std::string_view data, std::string_view name) const noexcept override {
+            if (data.starts_with("PTCH") || data.starts_with("PROP")) {
+                return true;
+            }
+            if (name.ends_with(".bin")) {
+                return true;
+            }
+            return false;
+        }
     };
     template <size_t I>
     static constinit auto bin_format = BinFormat<I>{};
 
     static struct TextFromat : DynamicFormat {
-        char const* name() const noexcept override {
+        std::string_view name() const noexcept override {
             return "text";
+        }
+        std::string_view oposite_name() const noexcept override {
+            return "bin";
+        }
+        std::string_view default_extension() const noexcept override {
+            return ".py";
         }
         bool output_allways_hashed() const noexcept override {
             return false;
@@ -67,9 +88,18 @@ namespace ritobin::io::dynamic_format_impl {
         std::string write(const Bin &bin, std::vector<char> &data) const override {
             return write_text(bin, data, 4);
         }
+        bool try_guess(std::string_view data, std::string_view name) const noexcept override {
+            if (data.starts_with("#PROP_text") || data.starts_with("#PTCH_text")) {
+                return true;
+            }
+            if (name.ends_with(".txt") || name.ends_with(".py")) {
+                return true;
+            }
+            return false;
+        }
     } text_format = {};
 
-    static constinit auto formats = []<size_t...I>(std::index_sequence<I...>) {
+    static auto formats = []<size_t...I>(std::index_sequence<I...>) consteval {
         return std::array {
             (DynamicFormat const*)&text_format,
             ((DynamicFormat const*)&bin_format<I>)...
@@ -101,6 +131,15 @@ namespace ritobin::io {
     DynamicFormat const* DynamicFormat::get(std::string_view name) noexcept {
         for (auto format: formats) {
             if (format->name() == name) {
+                return format;
+            }
+        }
+        return nullptr;
+    }
+
+    DynamicFormat const* DynamicFormat::guess(std::string_view data, std::string_view file_name) noexcept {
+        for (auto format: formats) {
+            if (format->try_guess(data, file_name)) {
                 return format;
             }
         }

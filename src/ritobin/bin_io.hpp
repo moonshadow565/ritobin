@@ -15,13 +15,17 @@ namespace ritobin::io {
     };
 
     struct DynamicFormat {
-        virtual char const* name() const noexcept = 0;
+        virtual std::string_view name() const noexcept = 0;
+        virtual std::string_view oposite_name() const noexcept = 0;
+        virtual std::string_view default_extension() const noexcept = 0;
         virtual bool output_allways_hashed() const noexcept = 0;
         virtual std::string read(ritobin::Bin& bin, std::span<char const> data) const = 0;
         virtual std::string write(ritobin::Bin const& bin, std::vector<char>& data) const = 0;
+        virtual bool try_guess(std::string_view data, std::string_view name) const noexcept = 0;
 
         static std::span<DynamicFormat const* const> list() noexcept;
         static DynamicFormat const* get(std::string_view name) noexcept;
+        static DynamicFormat const* guess(std::string_view data, std::string_view file_name) noexcept;
     };
 
     // Read .bin files

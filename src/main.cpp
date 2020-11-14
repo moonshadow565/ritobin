@@ -19,36 +19,29 @@ using ritobin::Bin;
 using ritobin::BinUnhasher;
 using ritobin::io::DynamicFormat;
 
-static DynamicFormat const* parse_format(std::string const& name) {
-    auto format = DynamicFormat::get(name);
-    if (!format) {
-        throw std::runtime_error("Format not found: " + name);
-    }
-    return format;
-}
-
-template<char M>
-static FILE* parse_file(std::string const& name) {
-    char mode[] = { M, 'b', '\0'};
-    auto file = M == 'r' ? stdin : stdout;
-    if (name == "-") {
-        set_binary_mode(file);
+static DynamicFormat const* get_format(std::string const& name, std::string_view data, std::string const& file_name) {
+    if (!name.empty()) {
+        auto format = DynamicFormat::get(name);
+        if (!format) {
+            throw std::runtime_error("Format not found: " + name);
+        }
+        return format;
     } else {
-        file = fopen(name.c_str(), mode);
+        auto format = DynamicFormat::guess(data, file_name);
+        if (!format) {
+            throw std::runtime_error("Failed to guess format for file: " + file_name);
+        }
+        return format;
     }
-    if (!file) {
-        throw std::runtime_error("Failed to open file with " + (mode + (" mode: " + name)));
-    }
-    return file;
 }
 
 struct Args {
     bool keep_hashed = {};
     std::string dir = {};
-    DynamicFormat const* input_format = {};
-    FILE* input_file = {};
-    DynamicFormat const* output_format = {};
-    FILE* output_file = {};
+    std::string input_file = {};
+    std::string output_file = {};
+    std::string input_format = {};
+    std::string output_format = {};
 
     Args(int argc, char** argv) {
         argparse::ArgumentParser program("ritobin");
@@ -56,35 +49,28 @@ struct Args {
                 .help("do not run unhasher")
                 .default_value(false)
                 .implicit_value(true);
-        program.add_argument("input_format")
-                .help("format of input file")
-                .required()
-                .action(&parse_format);
         program.add_argument("input_file")
                 .help("input file")
-                .required()
-                .action(&parse_file<'r'>);
-        program.add_argument("output_format")
-                .help("format of output file")
-                .required()
-                .action(&parse_format);
+                .required();
         program.add_argument("output_file")
                 .help("output file")
-                .required()
-                .action(&parse_file<'w'>);
+                .default_value(std::string(""));
+        program.add_argument("-i", "--input-format")
+                .default_value(std::string(""))
+                .help("format of input file");
+        program.add_argument("-o", "--output-format")
+                .default_value(std::string(""))
+                .help("format of output file");
         try {
             program.parse_args(argc, argv);
             dir = argv[0];
             auto const slash = dir.find_last_of("/\\");
             dir =  slash == std::string::npos ? "." : dir.substr(0, slash);
             keep_hashed = program.get<bool>("--keep-hashed");
-            input_format = program.get<DynamicFormat const*>("input_format");
-            input_file = program.get<FILE*>("input_file");
-            output_format = program.get<DynamicFormat const*>("output_format");
-            output_file = program.get<FILE*>("output_file");
-            if (output_format->output_allways_hashed()) {
-                keep_hashed = true;
-            }
+            input_file = program.get<std::string>("input_file");
+            output_file = program.get<std::string>("output_file");
+            input_format = program.get<std::string>("--input-format");
+            output_format = program.get<std::string>("--output-format");
         } catch (const std::runtime_error& err) {
             std::cerr << err.what() << std::endl;
             std::cerr << program << std::endl;
@@ -96,20 +82,47 @@ struct Args {
         }
     }
 
+    template<char M>
+    FILE* open_file(std::string const& name) {
+        char mode[] = { M, 'b', '\0'};
+        std::cerr << "Open file for " << mode << ": " << name << std::endl;
+        auto file = M == 'r' ? stdin : stdout;
+        if (name == "-") {
+            set_binary_mode(file);
+        } else {
+            file = fopen(name.c_str(), mode);
+        }
+        if (!file) {
+            throw std::runtime_error("Failed to open file with!");
+        }
+        return file;
+    }
+
     void read(Bin& bin) {
+        auto file = open_file<'r'>(input_file);
+
         std::vector<char> data;
         char buffer[4096];
-        while (auto read = fread(buffer, 1, sizeof(buffer), input_file)) {
+        std::cerr << "Reading..." << std::endl;
+        while (auto read = fread(buffer, 1, sizeof(buffer), file)) {
             data.insert(data.end(), buffer, buffer + read);
         }
-        auto error = input_format->read(bin, data);
+        fclose(file);
+
+        std::cerr << "Parsing..." << std::endl;
+        auto format = get_format(input_format, {data.begin(), data.end()}, input_file);
+        auto error = format->read(bin, data);
         if (!error.empty()) {
             throw std::runtime_error(error);
+        }
+        if (output_file.empty() && output_format.empty()) {
+            output_format = format->oposite_name();
         }
     }
 
     void unhash(Bin& bin) {
         if (!keep_hashed) {
+            std::cerr << "Unashing..." << std::endl;
             auto unhasher = BinUnhasher{};
             unhasher.load_fnv1a_CDTB(dir + "/hashes.binentries.txt");
             unhasher.load_fnv1a_CDTB(dir + "/hashes.binhashes.txt");
@@ -121,14 +134,32 @@ struct Args {
         }
     }
 
-    void write(Bin const& bin) {
+    void write(Bin& bin) {
+        auto format = get_format(output_format, "", output_file);
+        if (!keep_hashed && !format->output_allways_hashed()) {
+            unhash(bin);
+        }
+        if (output_file.empty()) {
+            if (input_file == "-") {
+                output_file = "-";
+            } else {
+                output_file = input_file + std::string(format->default_extension());
+            }
+        }
+        auto file = open_file<'w'>(output_file);
+
+        std::cerr << "Serializing..." << std::endl;
         std::vector<char> data;
-        auto error = output_format->write(bin, data);
+        auto error = format->write(bin, data);
         if (!error.empty()) {
+            fclose(file);
             throw std::runtime_error(error);
         }
-        fwrite(data.data(), 1, data.size(), output_file);
-        fflush(output_file);
+
+        std::cerr << "Writing data..." << std::endl;
+        fwrite(data.data(), 1, data.size(), file);
+        fflush(file);
+        fclose(file);
     }
 };
 
@@ -136,11 +167,7 @@ int main(int argc, char** argv) {
     try {
         auto args = Args(argc, argv);
         auto bin = Bin{};
-        std::cerr << "Reading..." << std::endl;
         args.read(bin);
-        std::cerr << "Unashing..." << std::endl;
-        args.unhash(bin);
-        std::cerr << "Writing..." << std::endl;
         args.write(bin);
         return 0;
     } catch (const std::runtime_error& err) {

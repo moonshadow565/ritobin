@@ -1,6 +1,7 @@
 #include "bin_io.hpp"
 #include "bin_types_helper.hpp"
 #include "bin_numconv.hpp"
+#include "bin_strconv.hpp"
 
 namespace ritobin::io::text_write_impl {
     struct TextWriter {
@@ -86,34 +87,12 @@ namespace ritobin::io::text_write_impl {
         }
 
         void write(std::string_view str) noexcept {
-            write_raw("\"");
-            for (char c : str) {
-                if (c == '\t') { write_raw("\\t"); } 
-                else if (c == '\n') {  write_raw("\\n"); }
-                else if (c == '\r') {  write_raw("\\r"); }
-                else if (c == '\b') {  write_raw("\\b"); }
-                else if (c == '\f') {  write_raw("\\f"); }
-                else if (c == '\\') { write_raw("\\\\"); }
-                else if (c == '"') { write_raw("\\\""); }
-                else if (c < 0x20 || c > 0x7E) {
-                    constexpr char digits[] = "0123456789abcdef";
-                    char hex[] = { 
-                        '\\', 'x', 
-                        digits[(c >> 4) & 0x0F],
-                        digits[c & 0x0F],
-                        '\0' 
-                    };
-                    write_raw(hex);
-                }
-                else { buffer_.push_back(c); }
-            }
-            write_raw("\"");
+            str_quote(str, buffer_);
         }
 
         void write(std::string const& str) noexcept {
             write(std::string_view{str.data(), str.size()});
         }
-
 
         void write_hex(uint32_t hex) noexcept {
             constexpr char digits[] = "0123456789abcdef";

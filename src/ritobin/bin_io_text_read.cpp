@@ -1,6 +1,7 @@
 #include "bin_io.hpp"
 #include "bin_types_helper.hpp"
 #include "bin_numconv.hpp"
+#include "bin_strconv.hpp"
 
 #define bin_assert(...) do { \
     if(auto start = reader.cur_; !(__VA_ARGS__)) { \
@@ -133,88 +134,18 @@ namespace ritobin::io::impl_text_read {
             if (*cur_ != '"' && *cur_ != '\'') {
                 return false;
             }
-            auto const term = *cur_;
-            cur_++;
-            result.clear();
-            enum class State {
-                Take,
-                Escape,
-                Escape_CariageReturn,
-                Escape_Byte_0,
-                Escape_Byte_1,
-            } state = State::Take;
-            char escaped[8];
-            while (cur_ != cap_) {
-                char const c = *cur_;
-                if (state == State::Escape) {
-                    if (c == term) {
-                        state = State::Take;
-                        result.push_back(term);
-                    } else if (c == '\\') {
-                        state = State::Take;
-                        result.push_back('\\');
-                    } else if (c == 'b') {
-                        state = State::Take;
-                        result.push_back('\b');
-                    } else if (c == 'f') {
-                        state = State::Take;
-                        result.push_back('\f');
-                    } else if (c == 'n') {
-                        state = State::Take;
-                        result.push_back('\n');
-                    } else if (c == 'r') {
-                        state = State::Take;
-                        result.push_back('\r');
-                    } else if (c == 't') {
-                        state = State::Take;
-                        result.push_back('\t');
-                    } else if (c == '\n') {
-                        state = State::Take;
-                        result.push_back('\n');
-                    } else if (c == '\r') {
-                        state = State::Escape_CariageReturn;
-                    } else if (c == 'u') {
-                        // FIXME: implement unicode code points
-                        return false;
-                    } else if (c == 'x') {
-                        state = State::Escape_Byte_0;
-                    } else {
-                        return false;
-                    }
-                } else if (state == State::Escape_CariageReturn) {
-                    if (c == '\n') {
-                        state = State::Take;
-                        result.push_back('\n');
-                    } else {
-                        return false;
-                    }
-                } else if (state == State::Escape_Byte_0) {
-                    state = State::Escape_Byte_1;
-                    escaped[0] = c;
-                } else if (state == State::Escape_Byte_1) {
-                    state = State::Take;
-                    escaped[1] = c;
-                    uint8_t value = 0;
-                    if (to_num({escaped, 2}, value, 16)) {
-                        result.push_back(static_cast<char>(value));
-                    } else {
-                        return false;
-                    }
-                } else {
-                    if (c == '\\') {
-                        state = State::Escape;
-                    } else if (c < ' ') {
-                        return false;
-                    } else if (c == term) {
-                        cur_++;
-                        return true;
-                    } else {
-                        result.push_back(c);
-                    }
-                }
-                cur_++;
+            auto quote_end = str_unquote_fetch_end({cur_, cap_});
+            if (quote_end == cap_) {
+                return false;
             }
-            return false;
+            result.clear();
+            result.reserve(quote_end - cur_);
+            cur_ = str_unquote({cur_ + 1, quote_end}, result);
+            if (cur_ != quote_end) {
+                return false;
+            }
+            cur_++;
+            return true;
         }
 
         bool read_hash(FNV1a& value) noexcept {

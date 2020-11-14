@@ -8,6 +8,7 @@ if(MSVC)
     set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
     set(CMAKE_CXX_STANDARD_LIBRARIES "kernel32.lib User32.lib")
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
 add_library(ritobin_lib STATIC
@@ -25,6 +26,8 @@ add_library(ritobin_lib STATIC
     src/ritobin/bin_morph_type_value.cpp
     src/ritobin/bin_numconv.hpp
     src/ritobin/bin_numconv.cpp
+    src/ritobin/bin_strconv.hpp
+    src/ritobin/bin_strconv.cpp
     src/ritobin/bin_types.hpp
     src/ritobin/bin_types_helper.hpp
     src/ritobin/bin_unhash.hpp

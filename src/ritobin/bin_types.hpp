@@ -308,6 +308,7 @@ namespace ritobin {
     };
 
     struct Bin {
+        static inline constexpr char type_name[] = "sections";
         std::unordered_map<std::string, Value> sections;
     };
 }

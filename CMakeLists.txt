@@ -15,9 +15,10 @@ add_library(ritobin_lib STATIC
     src/ritobin/bin_hash.hpp
     src/ritobin/bin_hash.cpp
     src/ritobin/bin_io.hpp
-    src/ritobin/bin_io_bincompat.cpp
+    src/ritobin/bin_io_dynamic.cpp
     src/ritobin/bin_io_binary_read.cpp
     src/ritobin/bin_io_binary_write.cpp
+    src/ritobin/bin_io_json.cpp
     src/ritobin/bin_io_text_read.cpp
     src/ritobin/bin_io_text_write.cpp
     src/ritobin/bin_morph.hpp

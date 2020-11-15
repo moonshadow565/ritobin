@@ -55,6 +55,14 @@ namespace ritobin::io {
     extern std::string write_text(ElementList const& list, std::vector<char>& out, size_t indent_size = 2) noexcept;
     // Write zero or more pairs
     extern std::string write_text(PairList const& list, std::vector<char>& out, size_t indent_size = 2) noexcept;
+
+    // Read .json files
+    extern std::string read_json(Bin& value, std::span<char const> data) noexcept;
+    // Write .json files
+    extern std::string write_json(Bin const& value, std::vector<char>& out, int indent_size = 2) noexcept;
+
+    // Wirtes lossy .json files
+    extern std::string write_json_info(Bin const& value, std::vector<char>& out, int indent_size = 2) noexcept;
 }
 
 #endif // BIN_IO_HPP

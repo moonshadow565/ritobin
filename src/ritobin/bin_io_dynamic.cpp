@@ -67,7 +67,7 @@ namespace ritobin::io::dynamic_format_impl {
         }
     };
     template <size_t I>
-    static constinit auto bin_format = BinFormat<I>{};
+    static auto bin_format = BinFormat<I>{};
 
     static struct TextFromat : DynamicFormat {
         std::string_view name() const noexcept override {
@@ -99,9 +99,65 @@ namespace ritobin::io::dynamic_format_impl {
         }
     } text_format = {};
 
+    static struct JsonFromat : DynamicFormat {
+        std::string_view name() const noexcept override {
+            return "json";
+        }
+        std::string_view oposite_name() const noexcept override {
+            return "bin";
+        }
+        std::string_view default_extension() const noexcept override {
+            return ".json";
+        }
+        bool output_allways_hashed() const noexcept override {
+            return false;
+        }
+        std::string read(Bin &bin, std::span<const char> data) const override {
+            return read_json(bin, data);
+        }
+        std::string write(const Bin &bin, std::vector<char> &data) const override {
+            return write_json(bin, data, 2);
+        }
+        bool try_guess(std::string_view data, std::string_view name) const noexcept override {
+            if (data.starts_with("{")) {
+                return true;
+            }
+            if (name.ends_with(".json")) {
+                return true;
+            }
+            return false;
+        }
+    } json_format = {};
+
+    static struct InfoFromat : DynamicFormat {
+        std::string_view name() const noexcept override {
+            return "info";
+        }
+        std::string_view oposite_name() const noexcept override {
+            return "";
+        }
+        std::string_view default_extension() const noexcept override {
+            return ".json";
+        }
+        bool output_allways_hashed() const noexcept override {
+            return false;
+        }
+        std::string read(Bin&, std::span<const char> data) const override {
+            return "Json info files can't be read!";
+        }
+        std::string write(const Bin &bin, std::vector<char> &data) const override {
+            return write_json_info(bin, data, 2);
+        }
+        bool try_guess(std::string_view, std::string_view) const noexcept override {
+            return false;
+        }
+    } info_format = {};
+
     static auto formats = []<size_t...I>(std::index_sequence<I...>) consteval {
         return std::array {
             (DynamicFormat const*)&text_format,
+            (DynamicFormat const*)&json_format,
+            (DynamicFormat const*)&info_format,
             ((DynamicFormat const*)&bin_format<I>)...
         };
     } (std::make_index_sequence<sizeof(bin_versions) / sizeof(*bin_versions)>());

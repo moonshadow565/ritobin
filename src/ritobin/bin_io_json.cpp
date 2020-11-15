@@ -169,7 +169,8 @@ namespace ritobin::io::json_impl {
             bin_json_assert(json.contains("items"));
             bin_json_assert(json["valueType"].is_string());
             bin_json_assert(json["items"].is_array());
-            bin_json_assert(ValueHelper::try_type_name_to_type(json["valueType"], value.valueType));
+            std::string valueType_name = json["valueType"];
+            bin_json_assert(ValueHelper::try_type_name_to_type(valueType_name, value.valueType));
             auto const& json_items = json["items"];
             if (!json_items.empty()) {
                 auto& value_item = value.items.emplace_back(ValueHelper::type_to_value(value.valueType));
@@ -203,7 +204,8 @@ namespace ritobin::io::json_impl {
             bin_json_assert(json.contains("items"));
             bin_json_assert(json["valueType"].is_string());
             bin_json_assert(json["items"].is_array());
-            bin_json_assert(ValueHelper::try_type_name_to_type(json["valueType"], value.valueType));
+            std::string valueType_name = json["valueType"];
+            bin_json_assert(ValueHelper::try_type_name_to_type(valueType_name, value.valueType));
             auto const& json_items = json["items"];
             for (auto const& json_item: json_items) {
                 auto& value_item = value.items.emplace_back(ValueHelper::type_to_value(value.valueType));
@@ -251,8 +253,10 @@ namespace ritobin::io::json_impl {
             bin_json_assert(json["valueType"].is_string());
             bin_json_assert(json["keyType"].is_string());
             bin_json_assert(json["items"].is_array());
-            bin_json_assert(ValueHelper::try_type_name_to_type(json["keyType"], value.keyType));
-            bin_json_assert(ValueHelper::try_type_name_to_type(json["valueType"], value.valueType));
+            std::string keyType_name = json["keyType"];
+            std::string valueType_name = json["valueType"];
+            bin_json_assert(ValueHelper::try_type_name_to_type(keyType_name, value.keyType));
+            bin_json_assert(ValueHelper::try_type_name_to_type(valueType_name, value.valueType));
             auto const& json_items = json["items"];
             for (auto const& json_item: json_items) {
                 bin_json_assert(json_item.is_object());
@@ -314,7 +318,8 @@ namespace ritobin::io::json_impl {
                 auto& value_item = value.items.emplace_back();
                 bin_json_assert(hash_from_json(value_item.key, json_item["key"]));
                 Type type = Type::NONE;
-                bin_json_assert(ValueHelper::try_type_name_to_type(json_item["type"], type));
+                std::string type_name = json_item["type"];
+                bin_json_assert(ValueHelper::try_type_name_to_type(type_name, type));
                 value_item.value = ValueHelper::type_to_value(type);
                 value_from_json(value_item.value, json_item["value"]);
             }
@@ -372,7 +377,8 @@ namespace ritobin::io::json_impl {
             bin_json_assert(json_item.contains("value"));
             bin_json_assert(json_item["type"].is_string());
             Type type = Type::NONE;
-            bin_json_assert(ValueHelper::try_type_name_to_type(json_item["type"], type));
+            std::string type_name = json_item["type"];
+            bin_json_assert(ValueHelper::try_type_name_to_type(type_name, type));
             auto& section = bin.sections[json_key];
             section = ValueHelper::type_to_value(type);
             value_from_json(section, json_item["value"]);

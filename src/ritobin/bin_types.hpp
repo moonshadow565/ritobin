@@ -294,18 +294,36 @@ namespace ritobin {
     >;
 
     struct Element {
+        static inline constexpr char type_name[] = "element";
         Value value = {};
+        Element();
+        Element(Value value);
     };
 
     struct Pair {
+        static inline constexpr char type_name[] = "pair";
         Value key = {};
         Value value = {};
+        Pair();
+        Pair(Value key, Value value);
     };
 
     struct Field {
+        static inline constexpr char type_name[] = "field";
         FNV1a key = {};
         Value value = {};
+        Field();
+        Field(FNV1a key, Value value);
     };
+
+    inline Element::Element() {}
+    inline Element::Element(Value value) : value(std::move(value)) {}
+
+    inline Pair::Pair() {}
+    inline Pair::Pair(Value key, Value value) : key(std::move(key)), value(std::move(value)) {}
+
+    inline Field::Field() {}
+    inline Field::Field(FNV1a key, Value value) : key(std::move(key)), value(std::move(value)) {}
 
     struct Bin {
         static inline constexpr char type_name[] = "sections";

@@ -110,7 +110,7 @@ struct Args {
         fclose(file);
 
         std::cerr << "Parsing..." << std::endl;
-        auto format = get_format(input_format, {data.begin(), data.end()}, input_file);
+        auto format = get_format(input_format, std::string_view{data.data(), data.size()}, input_file);
         auto error = format->read(bin, data);
         if (!error.empty()) {
             throw std::runtime_error(error);
@@ -143,20 +143,20 @@ struct Args {
             if (input_file == "-") {
                 output_file = "-";
             } else {
-                output_file = input_file + std::string(format->default_extension());
+                auto dot = input_file.find_last_of(".");
+                output_file = input_file.substr(0, dot) + std::string(format->default_extension());
             }
         }
-        auto file = open_file<'w'>(output_file);
 
         std::cerr << "Serializing..." << std::endl;
         std::vector<char> data;
         auto error = format->write(bin, data);
         if (!error.empty()) {
-            fclose(file);
             throw std::runtime_error(error);
         }
 
         std::cerr << "Writing data..." << std::endl;
+        auto file = open_file<'w'>(output_file);
         fwrite(data.data(), 1, data.size(), file);
         fflush(file);
         fclose(file);

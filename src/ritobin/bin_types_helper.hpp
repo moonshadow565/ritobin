@@ -16,7 +16,7 @@ namespace ritobin {
 
         static inline Value type_to_value(Type type) noexcept {
             Value value = None{};
-            ((T::type == type ? (value = T{}, true) : false) || ...);
+            (void)((T::type == type ? (value = T{}, true) : false) || ...);
             return value;
         }
 
@@ -26,13 +26,13 @@ namespace ritobin {
 
         static constexpr std::string_view type_to_type_name(Type type) noexcept {
             std::string_view type_name = {};
-            ((T::type == type ? (type_name = T::type_name, true) : false) || ...);
+            (void)((T::type == type ? (type_name = T::type_name, true) : false) || ...);
             return type_name;
         }
 
         static inline Value type_name_to_value(std::string_view type_name) noexcept {
             Value value = None{};
-            ((type_name == T::type_name ? (value = T{}, true) : false) || ...);
+            (void)((type_name == T::type_name ? (value = T{}, true) : false) || ...);
             return value;
         }
 
@@ -42,7 +42,7 @@ namespace ritobin {
 
         static constexpr Category type_to_category(Type type) noexcept {
             Category category = Category::NONE;
-            ((type == T::type ? (category = T::category, true) : false) || ...);
+            (void)((type == T::type ? (category = T::category, true) : false) || ...);
             return category;
         }
 

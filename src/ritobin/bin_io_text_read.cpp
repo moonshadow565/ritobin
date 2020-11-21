@@ -134,13 +134,14 @@ namespace ritobin::io::impl_text_read {
             if (*cur_ != '"' && *cur_ != '\'') {
                 return false;
             }
-            auto quote_end = str_unquote_fetch_end({cur_, cap_});
+            auto quote_end = str_unquote_fetch_end(std::string_view{cur_, (size_t)(cap_ - cur_)});
             if (quote_end == cap_) {
                 return false;
             }
             result.clear();
             result.reserve(quote_end - cur_);
-            cur_ = str_unquote({cur_ + 1, quote_end}, result);
+            ++cur_;
+            cur_ = str_unquote(std::string_view{cur_, (size_t)(quote_end - cur_)}, result);
             if (cur_ != quote_end) {
                 return false;
             }

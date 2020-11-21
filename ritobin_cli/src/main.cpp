@@ -124,12 +124,12 @@ struct Args {
         if (!keep_hashed) {
             std::cerr << "Unashing..." << std::endl;
             auto unhasher = BinUnhasher{};
-            unhasher.load_fnv1a_CDTB(dir + "/hashes.binentries.txt");
-            unhasher.load_fnv1a_CDTB(dir + "/hashes.binhashes.txt");
-            unhasher.load_fnv1a_CDTB(dir + "/hashes.bintypes.txt");
-            unhasher.load_fnv1a_CDTB(dir + "/hashes.binfields.txt");
-            unhasher.load_xxh64_CDTB(dir + "/hashes.game.txt");
-            unhasher.load_xxh64_CDTB(dir + "/hashes.lcu.txt");
+            unhasher.load_fnv1a_CDTB(dir + "/hashes/hashes.binentries.txt");
+            unhasher.load_fnv1a_CDTB(dir + "/hashes/hashes.binhashes.txt");
+            unhasher.load_fnv1a_CDTB(dir + "/hashes/hashes.bintypes.txt");
+            unhasher.load_fnv1a_CDTB(dir + "/hashes/hashes.binfields.txt");
+            unhasher.load_xxh64_CDTB(dir + "/hashes/hashes.game.txt");
+            unhasher.load_xxh64_CDTB(dir + "/hashes/hashes.lcu.txt");
             unhasher.unhash_bin(bin);
         }
     }

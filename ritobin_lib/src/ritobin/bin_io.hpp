@@ -25,7 +25,7 @@ namespace ritobin::io {
 
         static std::span<DynamicFormat const* const> list() noexcept;
         static DynamicFormat const* get(std::string_view name) noexcept;
-        static DynamicFormat const* guess(std::string_view data, std::string_view file_name) noexcept;
+        static DynamicFormat const* guess(std::span<char const> data, std::string_view file_name) noexcept;
     };
 
     // Read .bin files

@@ -193,9 +193,9 @@ namespace ritobin::io {
         return nullptr;
     }
 
-    DynamicFormat const* DynamicFormat::guess(std::string_view data, std::string_view file_name) noexcept {
+    DynamicFormat const* DynamicFormat::guess(std::span<char const> data, std::string_view file_name) noexcept {
         for (auto format: formats) {
-            if (format->try_guess(data, file_name)) {
+            if (format->try_guess(std::string_view{data.data(), data.size()}, file_name)) {
                 return format;
             }
         }

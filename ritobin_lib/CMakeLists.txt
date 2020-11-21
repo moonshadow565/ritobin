@@ -28,6 +28,7 @@ add_library(ritobin_lib STATIC
     src/ritobin/bin_unhash.hpp
     src/ritobin/bin_unhash.cpp
 )
+
 target_include_directories(ritobin_lib PUBLIC src/)
 target_include_directories(ritobin_lib PRIVATE deps/)
 

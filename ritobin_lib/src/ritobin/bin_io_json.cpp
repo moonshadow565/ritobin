@@ -4,6 +4,7 @@
 #include "bin_numconv.hpp"
 #define JSON_NOEXCEPTION
 #include <json.hpp>
+#include <optional>
 
 #define bin_json_assert(...) \
     do { \

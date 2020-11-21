@@ -2,6 +2,7 @@
 #include <portable-file-dialogs.h>
 #include <ritobin/bin_io.hpp>
 #include <ritobin/bin_unhash.hpp>
+#include <optional>
 
 using ritobin::Bin;
 using ritobin::BinUnhasher;
@@ -158,7 +159,7 @@ int main(int, char** argv) {
     App app = {};
     app.set_dir_from_apppath(argv[0]);
     bool result = app.run_once();
-    [[maybe_unused]] int c = getc(stdin);
     fprintf(stderr, "Press enter to exit or close this window...\n");
+    [[maybe_unused]] int c = getc(stdin);
     return result ? EXIT_SUCCESS : EXIT_FAILURE;
 }

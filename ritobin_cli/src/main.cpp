@@ -2,6 +2,7 @@
 #include <argparse.hpp>
 #include <ritobin/bin_io.hpp>
 #include <ritobin/bin_unhash.hpp>
+#include <optional>
 
 #ifdef WIN32
 #include <fcntl.h>

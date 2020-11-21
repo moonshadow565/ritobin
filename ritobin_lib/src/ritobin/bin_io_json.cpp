@@ -3,7 +3,7 @@
 #include "bin_types_helper.hpp"
 #include "bin_numconv.hpp"
 #define JSON_NOEXCEPTION
-#include "json.hpp"
+#include <json.hpp>
 
 #define bin_json_assert(...) \
     do { \

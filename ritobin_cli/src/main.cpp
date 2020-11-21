@@ -1,7 +1,7 @@
 #include <cstdlib>
-#include "argparse.hpp"
-#include "ritobin/bin_io.hpp"
-#include "ritobin/bin_unhash.hpp"
+#include <argparse.hpp>
+#include <ritobin/bin_io.hpp>
+#include <ritobin/bin_unhash.hpp>
 
 #ifdef WIN32
 #include <fcntl.h>

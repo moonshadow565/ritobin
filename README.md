@@ -7,8 +7,31 @@ Convert it back:
 ```
 ./txt2ritobin input.txt output.bin
 ```
+
+ ritobin_cli.exe options
+```
+Usage: ritobin [options] input output
+
+Positional arguments:
+input                   input file or directory[Required]
+output                  output file or directory
+
+Optional arguments:
+-h --help               show this help message and exit
+-k --keep-hashed        do not run unhasher
+-r --recursive          run on directory
+-i --input-format       format of input file
+-o --output-format      format of output file
+-d --dir-hashes         directory containing hashes
+
+Formats:
+        - text
+        - json
+        - info
+        - bin
+```
  
- Sample output
+ Custom text format example
  ```py
 #PROP_text
 

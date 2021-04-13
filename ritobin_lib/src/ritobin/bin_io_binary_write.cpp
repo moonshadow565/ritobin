@@ -83,8 +83,7 @@ namespace ritobin::io::impl_binary_write {
         bool process(Bin const& bin) noexcept {
             error.clear();
             writer.buffer_.clear();
-            bin_assert(write_header(bin));
-            bin_assert(write_entries(bin));
+            bin_assert(write_sections(bin));
             return true;
         }
 
@@ -94,7 +93,7 @@ namespace ritobin::io::impl_binary_write {
             return false;
         }
 
-        bool write_header(Bin const& bin) noexcept {
+        bool write_sections(Bin const& bin) noexcept {
             auto type_section = bin.sections.find("type");
             bin_assert(type_section != bin.sections.end());
             auto type = std::get_if<String>(&type_section->second);
@@ -114,12 +113,23 @@ namespace ritobin::io::impl_binary_write {
             bin_assert(version);
             writer.write(uint32_t{ version->value });
 
-            if (version->value < 2) {
-                return true;
+            if (version->value >= 2) {
+                bin_assert(write_links(bin));
+            }
+            bin_assert(write_entries(bin));
+            if (version->value >= 3 && type->value == "PTCH") {
+                bin_assert(write_patches(bin));
             }
 
+            return true;
+        }
+
+        bool write_links(Bin const& bin) noexcept {
             auto linked_section = bin.sections.find("linked");
-            bin_assert(linked_section != bin.sections.end());
+            if (linked_section == bin.sections.end()) {
+                writer.write(static_cast<uint32_t>(0));
+                return true;
+            }
             auto linked = std::get_if<List>(&linked_section->second);
             bin_assert(linked);
             bin_assert(linked->valueType == Type::STRING);
@@ -134,7 +144,10 @@ namespace ritobin::io::impl_binary_write {
     
         bool write_entries(Bin const& bin) noexcept {
             auto entries_section = bin.sections.find("entries");
-            bin_assert(entries_section != bin.sections.end());
+            if (entries_section == bin.sections.end()) {
+                writer.write(static_cast<uint32_t>(0));
+                return true;
+            }
             auto entries = std::get_if<Map>(&entries_section->second);
             bin_assert(entries);
             bin_assert(entries->keyType == Type::HASH);
@@ -169,6 +182,46 @@ namespace ritobin::io::impl_binary_write {
                 bin_assert(writer.write(ValueHelper::value_to_type(item)));
                 bin_assert(write_value(item));
             }
+            writer.write_at(position, writer.position() - position - 4);
+            return true;
+        }
+
+
+        bool write_patches(Bin const& bin) noexcept {
+            auto patches_section = bin.sections.find("patches");
+            if (patches_section == bin.sections.end()) {
+                writer.write(static_cast<uint32_t>(0));
+                return true;
+            }
+            auto patches = std::get_if<Map>(&patches_section->second);
+            bin_assert(patches);
+            bin_assert(patches->keyType == Type::HASH);
+            bin_assert(patches->valueType == Type::EMBED);
+            writer.write(static_cast<uint32_t>(patches->items.size()));
+            for (auto const& [entryKey, entryValue] : patches->items) {
+                auto key = std::get_if<Hash>(&entryKey);
+                auto value = std::get_if<Embed>(&entryValue);
+                bin_assert(key);
+                bin_assert(value);
+                bin_assert(write_patch(*key, *value));
+            }
+            return true;
+        }
+
+        bool write_patch(Hash const& patchKey, Embed const& patchValue) noexcept {
+            writer.write(uint32_t{ patchKey.value.hash() });
+            size_t position = writer.position();
+            writer.write(uint32_t{});
+            auto const name = patchValue.find_field({"path"});
+            auto const value = patchValue.find_field({"value"});
+            bin_assert(name);
+            bin_assert(value);
+            auto const nameType = ValueHelper::value_to_type(name->value);
+            auto const valueType = ValueHelper::value_to_type(value->value);
+            bin_assert(nameType == Type::STRING);
+            bin_assert(writer.write(valueType));
+            writer.write(std::get<String>(name->value).value);
+            write_value(value->value);
             writer.write_at(position, writer.position() - position - 4);
             return true;
         }

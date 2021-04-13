@@ -222,6 +222,8 @@ namespace ritobin {
         static inline constexpr Category category = Category::CLASS;
         FNV1a name = {};
         FieldList items = {};
+        inline Field* find_field(FNV1a const& key) noexcept;
+        inline Field const* find_field(FNV1a const& key) const noexcept;
     };
 
     struct Embed {
@@ -230,6 +232,8 @@ namespace ritobin {
         static inline constexpr Category category = Category::CLASS;
         FNV1a name = {};
         FieldList items = {};
+        inline Field* find_field(FNV1a const& key) noexcept;
+        inline Field const* find_field(FNV1a const& key) const noexcept;
     };
 
     struct Link {
@@ -315,6 +319,42 @@ namespace ritobin {
         Field();
         Field(FNV1a key, Value value);
     };
+
+    inline Field* Pointer::find_field(FNV1a const& key) noexcept {
+        for (auto& field: items) {
+            if (field.key.hash() == key.hash()) {
+                return &field;
+            }
+        }
+        return nullptr;
+    }
+
+    inline Field const* Pointer::find_field(FNV1a const& key) const noexcept {
+        for (auto const& field: items) {
+            if (field.key.hash() == key.hash()) {
+                return &field;
+            }
+        }
+        return nullptr;
+    }
+
+    inline Field* Embed::find_field(FNV1a const& key) noexcept {
+        for (auto& field: items) {
+            if (field.key.hash() == key.hash()) {
+                return &field;
+            }
+        }
+        return nullptr;
+    }
+
+    inline Field const* Embed::find_field(FNV1a const& key) const noexcept {
+        for (auto const& field: items) {
+            if (field.key.hash() == key.hash()) {
+                return &field;
+            }
+        }
+        return nullptr;
+    }
 
     inline Element::Element() {}
     inline Element::Element(Value value) : value(std::move(value)) {}

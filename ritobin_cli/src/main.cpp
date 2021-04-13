@@ -41,6 +41,8 @@ static DynamicFormat const* get_format(std::string const& name, std::string_view
 struct Args {
     bool keep_hashed = {};
     bool recursive = {};
+    bool log = {};
+
     std::string dir = {};
     std::string input_file = {};
     std::string output_file = {};
@@ -58,6 +60,10 @@ struct Args {
                 .implicit_value(true);
         program.add_argument("-r", "--recursive")
                 .help("run on directory")
+                .default_value(false)
+                .implicit_value(true);
+        program.add_argument("-v", "--verbose")
+                .help("log more")
                 .default_value(false)
                 .implicit_value(true);
         program.add_argument("input")
@@ -80,6 +86,7 @@ struct Args {
             dir =  program.get<std::string>("--dir-hashes");
             keep_hashed = program.get<bool>("--keep-hashed");
             recursive = program.get<bool>("--recursive");
+            log = program.get<bool>("--verbose");
             input_format = program.get<std::string>("--input-format");
             output_format = program.get<std::string>("--output-format");
             if (recursive) {
@@ -104,7 +111,9 @@ struct Args {
     template<char M>
     FILE* open_file(std::string const& name) {
         char mode[] = { M, 'b', '\0'};
-        std::cerr << "Open file for " << mode << ": " << name << std::endl;
+        if (log) {
+            std::cerr << "Open file for " << mode << ": " << name << std::endl;
+        }
         auto file = M == 'r' ? stdin : stdout;
         if (name == "-") {
             set_binary_mode(file);
@@ -128,13 +137,17 @@ struct Args {
 
         std::vector<char> data;
         char buffer[4096];
-        std::cerr << "Reading..." << std::endl;
+        if (log) {
+            std::cerr << "Reading..." << std::endl;
+        }
         while (auto read = fread(buffer, 1, sizeof(buffer), file)) {
             data.insert(data.end(), buffer, buffer + read);
         }
         fclose(file);
 
-        std::cerr << "Parsing..." << std::endl;
+        if (log) {
+            std::cerr << "Parsing..." << std::endl;
+        }
         auto format = get_format(input_format, std::string_view{data.data(), data.size()}, input_file);
         auto error = format->read(bin, data);
         if (!error.empty()) {
@@ -148,7 +161,9 @@ struct Args {
     void unhash(Bin& bin) {
         if (!keep_hashed) {
             if (!*unhasher) {
-                std::cerr << "Loading hashes..." << std::endl;
+                if (log) {
+                    std::cerr << "Loading hashes..." << std::endl;
+                }
                 auto& uh = unhasher->emplace();
                 if (dir.empty()) {
                     dir = ".";
@@ -160,7 +175,9 @@ struct Args {
                 uh.load_xxh64_CDTB(dir + "/hashes.game.txt");
                 uh.load_xxh64_CDTB(dir + "/hashes.lcu.txt");
             }
-            std::cerr << "Unashing..." << std::endl;
+            if (log) {
+                std::cerr << "Unashing..." << std::endl;
+            }
             (*unhasher)->unhash_bin(bin);
         }
     }
@@ -181,7 +198,9 @@ struct Args {
             }
         }
 
-        std::cerr << "Serializing..." << std::endl;
+        if (log) {
+            std::cerr << "Serializing..." << std::endl;
+        }
         std::vector<char> data;
         auto error = format->write(bin, data);
         if (!error.empty()) {
@@ -189,7 +208,9 @@ struct Args {
         }
 
         auto file = open_file<'w'>(output_file);
-        std::cerr << "Writing data..." << std::endl;
+        if (log) {
+            std::cerr << "Writing data..." << std::endl;
+        }
         fwrite(data.data(), 1, data.size(), file);
         fflush(file);
         fclose(file);
@@ -201,6 +222,8 @@ struct Args {
             read(bin);
             write(bin);
         } catch (const std::runtime_error& err) {
+            std::cerr << "In: " << input_file << std::endl;
+            std::cerr << "Out: " << output_file << std::endl;
             std::cerr << "Error: " << err.what() << std::endl;
         }
     }

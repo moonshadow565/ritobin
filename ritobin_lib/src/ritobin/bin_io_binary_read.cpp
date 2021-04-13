@@ -112,11 +112,13 @@ namespace ritobin::io::impl_binary_read {
             std::array<char, 4> magic = {};
             uint32_t version = 0;
             bin_assert(reader.read(magic));
+            bool is_patch = false;
             if (magic == std::array{ 'P', 'T', 'C', 'H' }) {
                 uint64_t unk = {};
                 bin_assert(reader.read(unk));
                 bin_assert(reader.read(magic));
                 bin.sections.emplace("type", String{ "PTCH" });
+                is_patch = true;
             } else {
                 bin.sections.emplace("type", String{ "PROP" });
             }
@@ -124,22 +126,26 @@ namespace ritobin::io::impl_binary_read {
             bin_assert(reader.read(version));
             bin.sections.emplace("version", U32{ version });
 
-            bin_assert(read_linked(version >= 2));
+            if (version >= 2) {
+                bin_assert(read_linked());
+            }
             bin_assert(read_entries());
+            if (is_patch && version >= 3) {
+                bin_assert(read_patches());
+            }
+
             bin_assert(reader.cur_ == reader.cap_);
             return true;
         }
 
-        bool read_linked(bool hasLinks) noexcept {
+        bool read_linked() noexcept {
             List linkedList = { Type::STRING, {} };
-            if (hasLinks) {
-                uint32_t linkedFilesCount = {};
-                bin_assert(reader.read(linkedFilesCount));
-                for (uint32_t i = 0; i != linkedFilesCount; i++) {
-                    String linked = {};
-                    bin_assert(reader.read(linked.value));
-                    linkedList.items.emplace_back(Element{ linked });
-                }
+            uint32_t linkedFilesCount = {};
+            bin_assert(reader.read(linkedFilesCount));
+            for (uint32_t i = 0; i != linkedFilesCount; i++) {
+                String linked = {};
+                bin_assert(reader.read(linked.value));
+                linkedList.items.emplace_back(Element{ linked });
             }
             bin.sections.emplace("linked", std::move(linkedList));
             return true;
@@ -176,6 +182,37 @@ namespace ritobin::io::impl_binary_read {
                 bin_assert(read_value_of(item, type));
             }
             bin_assert(reader.position() == position + entryLength);
+            return true;
+        }
+
+        bool read_patches() noexcept {
+            uint32_t patchCount = {};
+            bin_assert(reader.read(patchCount));
+            Map patchMap = { Type::HASH,  Type::EMBED, {} };
+            for (size_t i = {}; i != patchCount; i++) {
+                Hash entryKeyHash = {};
+                Embed entry = { { "patch" }, {} };
+                bin_assert(read_patch(entryKeyHash, entry));
+                patchMap.items.emplace_back(Pair{ std::move(entryKeyHash), std::move(entry) });
+            }
+            bin.sections.emplace("patches", std::move(patchMap));
+            return true;
+        }
+
+        bool read_patch(Hash& patchKeyHash, Embed& patch) {
+            uint32_t patchLength = 0;
+            bin_assert(reader.read(patchKeyHash.value));
+            bin_assert(reader.read(patchLength));
+            auto position = reader.position();
+            Type type = {};
+            String name = {};
+            Value value = {};
+            bin_assert(reader.read(type));
+            bin_assert(reader.read(name.value));
+            bin_assert(read_value_of(value, type));
+            bin_assert(reader.position() == position + patchLength);
+            patch.items.emplace_back(Field { {"path"}, std::move(name) });
+            patch.items.emplace_back(Field { {"value"}, std::move(value) });
             return true;
         }
 

@@ -28,8 +28,31 @@ namespace ritobin::io::compat_impl {
         }
     } compat_bin_latest = {};
 
+    static struct BinCompatLegacy : BinCompat {
+        char const* name() const noexcept override {
+            return "bin-legacy1";
+        }
+        bool type_to_raw(Type type, uint8_t &raw) const noexcept override {
+            if (type == Type::LIST2) {
+                type = Type::LIST;
+            }
+            return compat_bin_latest.type_to_raw(type, raw);
+        }
+        bool raw_to_type(uint8_t raw, Type& type) const noexcept override {
+            if (raw >= 18 && raw < 0x80) {
+                raw -= 18;
+                raw |= 0x80;
+            }
+            if (raw >= 0x81) {
+                raw += 1;
+            }
+            return compat_bin_latest.raw_to_type(raw, type);
+        }
+    } compat_bin_legacy1 = {};
+
     static BinCompat const* bin_versions[] = {
-        &compat_bin_latest
+        &compat_bin_latest,
+        &compat_bin_legacy1,
     };
 }
 

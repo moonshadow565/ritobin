@@ -130,7 +130,7 @@ namespace ritobin::io::impl_binary_read {
                 bin_assert(read_linked());
             }
             bin_assert(read_entries());
-            if (is_patch && version >= 3) {
+            if (is_patch /*&& version >= 3*/) {
                 bin_assert(read_patches());
             }
 

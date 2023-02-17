@@ -1,3 +1,6 @@
 [submodule "ritobin_hashes/CDTB"]
 	path = ritobin_hashes/CDTB
 	url = https://github.com/CommunityDragon/CDTB
+[submodule "LeagueHashes"]
+	path = LeagueHashes
+	url = https://github.com/LeagueToolkit/LeagueHashes

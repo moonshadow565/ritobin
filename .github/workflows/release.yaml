@@ -1,0 +1,35 @@
+name: Release
+on:
+  push:
+    tags:
+      - "*-*-*-*"
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+    - name: "Setup msvc"
+      uses: ilammy/msvc-dev-cmd@v1
+    - name: "Clone source"
+      uses: actions/checkout@v2
+      with:
+        submodules: 'true'
+    - name: "Build"
+      run: |
+        Rename-Item -LiteralPath "C:\\Strawberry" -NewName "C:\\fuckyou"
+        mkdir build
+        cd build
+        cmake -G "NMake Makefiles" "-DCMAKE_BUILD_TYPE:STRING=Release" ..
+        cmake --build .
+    - name: "Package"
+      shell: bash
+      run: |
+        mkdir -p bin/
+        cp build/ritobin_cli/ritobin*.exe bin/
+        cp build/ritobin_gui/ritobin*.exe bin/
+        cp -R LeagueHashes/hashes bin/hashes
+        sha256sum bin/*.exe
+        7z a ritobin.zip bin/
+    - name: "Release"
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ritobin.zip

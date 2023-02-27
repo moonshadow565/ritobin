@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.13)
 
 project(ritobin_lib LANGUAGES CXX)
 
@@ -31,5 +31,6 @@ add_library(ritobin_lib STATIC
 
 target_include_directories(ritobin_lib PUBLIC src/)
 target_include_directories(ritobin_lib PRIVATE deps/)
-
-
+if (WIN32)
+    target_sources(ritobin_lib INTERFACE ../res/utf8.manifest)
+endif()

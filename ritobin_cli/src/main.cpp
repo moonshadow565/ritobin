@@ -79,7 +79,7 @@ struct Args {
                 .default_value(std::string(""))
                 .help("format of output file");
         program.add_argument("-d", "--dir-hashes")
-                .default_value((fs::path(argv[0]).parent_path() / "hashes").generic_string())
+                .default_value((fs::u8path(argv[0]).parent_path() / "hashes").generic_string())
                 .help("directory containing hashes");
         try {
             program.parse_args(argc, argv);
@@ -119,7 +119,7 @@ struct Args {
             set_binary_mode(file);
         } else {
             if constexpr (M == 'w') {
-                auto parent_dir = fs::path(name).parent_path();
+                auto parent_dir = fs::u8path(name).parent_path();
                 if (std::error_code ec = {}; (fs::create_directories(parent_dir, ec)), ec != std::error_code{}) {
                     throw std::runtime_error("Failed to create parent directory: " + ec.message());
                 }
@@ -191,7 +191,7 @@ struct Args {
             if (input_file == "-") {
                 output_file = "-";
             } else {
-                output_file = fs::path(input_file).replace_extension(format->default_extension()).generic_string();
+                output_file = fs::u8path(input_file).replace_extension(format->default_extension()).generic_string();
                 if (recursive && !output_dir.empty()) {
                     output_file = (output_dir / fs::relative(output_file, input_dir)).generic_string();
                 }

@@ -120,8 +120,10 @@ struct Args {
         } else {
             if constexpr (M == 'w') {
                 auto parent_dir = fs::path(name).parent_path();
-                if (std::error_code ec = {}; (fs::create_directories(parent_dir, ec)), ec != std::error_code{}) {
-                    throw std::runtime_error("Failed to create parent directory: " + ec.message());
+                if (!parent_dir.empty()) {
+                    if (std::error_code ec = {}; (fs::create_directories(parent_dir, ec)), ec != std::error_code{}) {
+                        throw std::runtime_error("Failed to create parent directory: " + ec.message());
+                    }
                 }
             }
             file = fopen(name.c_str(), mode);

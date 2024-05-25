@@ -1,6 +1,7 @@
 #include <fstream>
 #include <charconv>
 #include <string>
+#include <filesystem>
 #include "bin_unhash.hpp"
 
 namespace ritobin {
@@ -147,8 +148,17 @@ namespace ritobin {
     }
 
     bool BinUnhasher::load_fnv1a_CDTB(std::string const& filename) noexcept {
-        std::ifstream file(filename);
-        return load_fnv1a_CDTB(file);
+        if (std::ifstream file(filename); load_fnv1a_CDTB(file)) {
+            return true;
+        }
+        bool had_some = false;
+        for (size_t i = 0;;i++) {
+            if (std::ifstream file(filename + "." + std::to_string(i)); !load_fnv1a_CDTB(file)) {
+                break;
+            }
+            had_some = true;
+        }
+        return had_some;
     }
 
     bool BinUnhasher::load_xxh64_CDTB(std::istream& istream) noexcept {
@@ -173,7 +183,16 @@ namespace ritobin {
     }
 
     bool BinUnhasher::load_xxh64_CDTB(std::string const& filename) noexcept {
-        std::ifstream file(filename);
-        return load_xxh64_CDTB(file);
+        if (std::ifstream file(filename); load_xxh64_CDTB(file)) {
+            return true;
+        }
+        bool had_some = false;
+        for (size_t i = 0;;i++) {
+            if (std::ifstream file(filename + "." + std::to_string(i)); !load_xxh64_CDTB(file)) {
+                break;
+            }
+            had_some = true;
+        }
+        return had_some;
     }
 }

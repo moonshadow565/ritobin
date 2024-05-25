@@ -10,7 +10,7 @@ jobs:
     - name: "Setup msvc"
       uses: ilammy/msvc-dev-cmd@v1
     - name: "Clone source"
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: 'true'
     - name: "Build"
@@ -30,6 +30,6 @@ jobs:
         sha256sum bin/*.exe
         7z a ritobin.zip bin/
     - name: "Release"
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: ritobin.zip

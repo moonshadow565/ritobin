@@ -1,6 +1,6 @@
 #include "bin_numconv.hpp"
 
-#ifndef MSVC
+#ifdef RITOBIN_NO_CHARCONV_FLOAT
 #include <cstdio>
 namespace ritobin {
     bool to_num(std::string_view str, float& num) noexcept {

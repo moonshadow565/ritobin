@@ -3,7 +3,7 @@
 #include <charconv>
 #include <string>
 
-#ifndef MSVC
+#ifdef RITOBIN_NO_CHARCONV_FLOAT
 namespace ritobin {
     extern bool to_num(std::string_view str, float& num) noexcept;
 

@@ -3,6 +3,7 @@
 #include <optional>
 #include <bit>
 #include <span>
+#include <inttypes.h>
 
 namespace ritobin::strconv_impl {
     // TODO: handle unicode shit properly

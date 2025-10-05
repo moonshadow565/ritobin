@@ -215,7 +215,10 @@ namespace ritobin::strconv_impl {
                 out.insert(out.end(), value->begin(), value->end());
                 return true;
             } else if (auto c = iter.pop()) {
-                if (c < (uint8_t)0x20) {
+                if (!c) {
+                    return false;
+                }
+                if ((uint8_t)*c < (uint8_t)0x20) {
                     constexpr char digits[] = "0123456789abcdef";
                     char hex[] = {
                         '\\', 'x',

@@ -10,6 +10,7 @@
 #include <variant>
 #include <vector>
 
+#include "bin_flatmap.hpp"
 #include "bin_hash.hpp"
 
 namespace ritobin {
@@ -367,7 +368,7 @@ namespace ritobin {
 
     struct Bin {
         static inline constexpr char type_name[] = "sections";
-        std::unordered_map<std::string, Value> sections;
+        flatmap<std::string, Value> sections;
     };
 }
 

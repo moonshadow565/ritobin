@@ -87,3 +87,13 @@ entries: map[hash,embed] = {
   }
 }
 ```
+
+# Linux build instructions
+Test on Ubuntu 24.04
+```
+sudo apt update
+sudo apt install gcc-14 g++-14 cmake ninja-build git
+git clone https://github.com/moonshadow565/ritobin
+cmake -G Ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -S ritobin -B ritobin-build
+cmake --build ritobin-build
+```

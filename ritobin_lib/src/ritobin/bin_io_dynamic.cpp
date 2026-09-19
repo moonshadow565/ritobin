@@ -100,7 +100,7 @@ namespace ritobin::io::dynamic_format_impl {
             return "bin";
         }
         std::string_view default_extension() const noexcept override {
-            return ".py";
+            return ".rito";
         }
         bool output_allways_hashed() const noexcept override {
             return false;
@@ -115,12 +115,40 @@ namespace ritobin::io::dynamic_format_impl {
             if (data.starts_with("#PROP_text") || data.starts_with("#PTCH_text")) {
                 return true;
             }
-            if (name.ends_with(".txt") || name.ends_with(".py")) {
+            if (name.ends_with(".ritobin") || name.ends_with(".rito") || name.ends_with(".riotbin")) {
                 return true;
             }
             return false;
         }
     } text_format = {};
+
+
+    static struct TextFromatLegacy : DynamicFormat {
+        std::string_view name() const noexcept override {
+            return "py";
+        }
+        std::string_view oposite_name() const noexcept override {
+            return "bin";
+        }
+        std::string_view default_extension() const noexcept override {
+            return ".py";
+        }
+        bool output_allways_hashed() const noexcept override {
+            return false;
+        }
+        std::string read(Bin &bin, std::span<const char> data) const override {
+            return read_text(bin, data);
+        }
+        std::string write(const Bin &bin, std::vector<char> &data) const override {
+            return write_text(bin, data, 4);
+        }
+        bool try_guess(std::string_view data, std::string_view name) const noexcept override {
+            if (name.ends_with(".txt") || name.ends_with(".py")) {
+                return true;
+            }
+            return false;
+        }
+    } text_format_legacy = {};
 
     static struct JsonFromat : DynamicFormat {
         std::string_view name() const noexcept override {
@@ -179,6 +207,7 @@ namespace ritobin::io::dynamic_format_impl {
     static auto formats = []<size_t...I>(std::index_sequence<I...>) consteval {
         return std::array {
             (DynamicFormat const*)&text_format,
+            (DynamicFormat const*)&text_format_legacy,
             (DynamicFormat const*)&json_format,
             (DynamicFormat const*)&info_format,
             ((DynamicFormat const*)&bin_format<I>)...

@@ -151,14 +151,8 @@ namespace ritobin::io::impl_text_read {
 
         bool read_hash(FNV1a& value) noexcept {
             auto const word = read_word();
-            if (word.size() < 2) {
-                return false;
-            }
-            if (word[0] != '0' || (word[1] != 'x' && word[1] != 'X')) {
-                return false;
-            }
             uint32_t result = 0;
-            if (to_num({word.data() + 2, word.size() - 2}, result, 16)) {
+            if (to_num(word, result)) {
                 value = FNV1a{ result };
                 return true;
             }
@@ -167,14 +161,8 @@ namespace ritobin::io::impl_text_read {
 
         bool read_hash(XXH64& value) noexcept {
             auto const word = read_word();
-            if (word.size() < 2) {
-                return false;
-            }
-            if (word[0] != '0' || (word[1] != 'x' && word[1] != 'X')) {
-                return false;
-            }
             uint64_t result = 0;
-            if (to_num({word.data() + 2, word.size() - 2}, result, 16)) {
+            if (to_num(word, result)) {
                 value = XXH64{ result };
                 return true;
             }

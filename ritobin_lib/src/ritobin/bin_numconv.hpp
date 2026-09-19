@@ -3,16 +3,12 @@
 #include <charconv>
 #include <string>
 
-#ifdef RITOBIN_NO_CHARCONV_FLOAT
-namespace ritobin {
-    extern bool to_num(std::string_view str, float& num) noexcept;
-
-    extern bool from_num(std::string& str, float const& num) noexcept;
-
-    extern bool to_num(std::string_view str, double& num) noexcept;
-
-    extern bool from_num(std::string& str, double const& num) noexcept;
-}
+#if !defined(__cpp_lib_to_chars) &&                                            \
+    !(defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 200000) &&                \
+    !(defined(_GLIBCXX_RELEASE) && _GLIBCXX_RELEASE >= 11) &&                  \
+    !(defined(_MSC_VER) && _MSC_VER >= 1924)
+#error                                                                         \
+    "std::from_chars for floating-point types is unavailable: need libc++ 20+, libstdc++ 11+ (GCC 11), or MSVC 19.24 (VS 2019 16.4)."
 #endif
 
 namespace ritobin {

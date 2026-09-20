@@ -3,6 +3,33 @@
 #include <ritobin/bin_io.hpp>
 #include <ritobin/bin_unhash.hpp>
 #include <optional>
+#include <filesystem>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+static std::filesystem::path get_program_folder(const char* argv0) {
+    std::filesystem::path program(argv0);
+    if (wchar_t buffer[1 << 15]; auto outsize = GetModuleFileNameW(NULL, buffer, 1 << 15)) {
+        auto exepath = std::wstring_view(buffer, outsize);
+        if (std::wstring_view root = L"\\\\?\\"; exepath.starts_with(root)) {
+            exepath.remove_prefix(root.size());
+        }
+        program = exepath;
+    }
+    return program.parent_path();
+}
+#else
+static std::filesystem::path get_program_folder(const char* argv0) {
+    return std::filesystem::path(argv0).parent_path();
+}
+#endif
 
 using ritobin::Bin;
 using ritobin::BinUnhasher;
@@ -17,11 +44,6 @@ struct App {
     DynamicFormat const* input_format = {};
     DynamicFormat const* output_format = {};
     std::vector<char> data = {};
-
-    void set_dir_from_apppath(std::string const& app) {
-        auto const slash = app.find_last_of("/\\");
-        dir =  slash == std::string::npos ? "." : app.substr(0, slash);
-    }
 
     BinUnhasher& get_unhasher() {
         if (!unhasher) {
@@ -158,7 +180,7 @@ struct App {
 
 int main(int, char** argv) {
     App app = {};
-    app.set_dir_from_apppath(argv[0]);
+    app.dir = get_program_folder(argv[0]).generic_string();
     bool result = app.run_once();
     fprintf(stderr, "Press enter to exit or close this window...\n");
     [[maybe_unused]] int c = getc(stdin);

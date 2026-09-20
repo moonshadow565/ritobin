@@ -5,7 +5,15 @@
 #include <optional>
 #include <filesystem>
 
-#ifdef WIN32
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+// do not reoder
 #include <fcntl.h>
 #include <io.h>
 static void set_binary_mode(FILE* file) {
@@ -13,8 +21,24 @@ static void set_binary_mode(FILE* file) {
         throw std::runtime_error("Can not change mode to binary!");
     }
 }
+
+static std::filesystem::path get_program_folder(const char* argv0) {
+    std::filesystem::path program(argv0);
+    if (wchar_t buffer[1 << 15]; auto outsize = GetModuleFileNameW(NULL, buffer, 1 << 15)) {
+        auto exepath = std::wstring_view(buffer, outsize);
+        if (std::wstring_view root = L"\\\\?\\"; exepath.starts_with(root)) {
+            exepath.remove_prefix(root.size());
+        }
+        program = exepath;
+    }
+    return program.parent_path();
+}
 #else
 static void set_binary_mode(FILE*) {}
+
+static std::filesystem::path get_program_folder(const char* argv0) {
+    return std::filesystem::path(argv0).parent_path();
+}
 #endif
 
 using ritobin::Bin;
@@ -79,7 +103,7 @@ struct Args {
                 .default_value(std::string(""))
                 .help("format of output file");
         program.add_argument("-d", "--dir-hashes")
-                .default_value((fs::path(argv[0]).parent_path() / "hashes").generic_string())
+                .default_value((get_program_folder(argv[0]) / "hashes").generic_string())
                 .help("directory containing hashes");
         try {
             program.parse_args(argc, argv);

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.20..4.0)
 
 project(ritobin_gui LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)

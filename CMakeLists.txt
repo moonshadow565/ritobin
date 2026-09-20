@@ -8,7 +8,6 @@ if(MSVC)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-add_subdirectory(ritobin_hashes)
 add_subdirectory(ritobin_lib)
 add_subdirectory(ritobin_cli)
 add_subdirectory(ritobin_gui)

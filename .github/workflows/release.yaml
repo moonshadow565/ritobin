@@ -12,7 +12,7 @@ jobs:
     - name: "Clone source"
       uses: actions/checkout@v4
       with:
-        submodules: 'true'
+        submodules: 'false'
     - name: "Build"
       run: |
         Rename-Item -LiteralPath "C:\\Strawberry" -NewName "C:\\fuckyou"
@@ -26,7 +26,10 @@ jobs:
         mkdir -p bin/
         cp build/ritobin_cli/ritobin*.exe bin/
         cp build/ritobin_gui/ritobin*.exe bin/
-        cp -R LeagueHashes/hashes bin/hashes
+        mkdir -p bin/hashes
+        python scripts/update_hashes.py bin/hashes
+        cp scripts/update_hashes.py bin/
+        cp scripts/update_hashes_gui.py bin/
         sha256sum bin/*.exe
         7z a ritobin.zip bin/
     - name: "Release"

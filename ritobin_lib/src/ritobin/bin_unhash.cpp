@@ -100,6 +100,14 @@ namespace ritobin {
         if (value.str().empty() && value.hash() != 0) {
             if (auto i = fnv1a.find(value.hash()); i != fnv1a.end()) {
                 value = FNV1a(i->second);
+            } else {
+                for (auto const& d : dynamic) {
+                    if (auto str = d->unhash_hash_fnv1a(value.hash()); !str.empty()) {
+                        fnv1a.emplace_hint(i, std::make_pair(value.hash(), str));
+                        value = FNV1a(str);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -108,6 +116,14 @@ namespace ritobin {
         if (value.str().empty() && value.hash() != 0) {
             if (auto i = xxh64.find(value.hash()); i != xxh64.end()) {
                 value = XXH64(i->second);
+            } else {
+                for (auto const& d : dynamic) {
+                    if (auto str = d->unhash_hash_xxh64(value.hash()); !str.empty()) {
+                        xxh64.emplace_hint(i, std::make_pair(value.hash(), str));
+                        value = XXH64(str);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -194,5 +210,25 @@ namespace ritobin {
             had_some = true;
         }
         return had_some;
+    }
+
+    bool BinUnhasher::load_mirmir(std::string const& filename) noexcept {
+        std::errc ec{};
+        auto result = BinUnhasherDynamic::create_mirmir(filename, ec);
+        if (ec != std::errc{}) {
+            return false;
+        }
+        dynamic.emplace_back(result);
+        return true;
+    }
+
+    bool BinUnhasher::load_lhdb(std::string const& filename) noexcept {
+        std::errc ec{};
+        auto result = BinUnhasherDynamic::create_lhdb(filename, ec);
+        if (ec != std::errc{}) {
+            return false;
+        }
+        dynamic.emplace_back(result);
+        return true;
     }
 }

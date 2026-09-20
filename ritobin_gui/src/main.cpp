@@ -32,6 +32,7 @@ struct App {
             unhasher->load_fnv1a_CDTB(dir + "/hashes/hashes.binfields.txt");
             unhasher->load_xxh64_CDTB(dir + "/hashes/hashes.game.txt");
             unhasher->load_xxh64_CDTB(dir + "/hashes/hashes.lcu.txt");
+            unhasher->load_lhdb(dir+ "/hashes");
         }
         return *unhasher;
     }

@@ -176,6 +176,7 @@ struct Args {
                 uh.load_fnv1a_CDTB(dir + "/hashes.binfields.txt");
                 uh.load_xxh64_CDTB(dir + "/hashes.game.txt");
                 uh.load_xxh64_CDTB(dir + "/hashes.lcu.txt");
+                uh.load_lhdb(dir);
             }
             if (log) {
                 std::cerr << "Unashing..." << std::endl;

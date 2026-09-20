@@ -27,6 +27,10 @@ add_library(ritobin_lib STATIC
     src/ritobin/bin_strconv.cpp
     src/ritobin/bin_types.hpp
     src/ritobin/bin_types_helper.hpp
+    src/ritobin/bin_unhash_dynamic.hpp
+    src/ritobin/bin_unhash_dynamic.cpp
+    src/ritobin/bin_unhash_dynamic_lhdb.cpp
+    src/ritobin/bin_unhash_dynamic_mirmir.cpp
     src/ritobin/bin_unhash.hpp
     src/ritobin/bin_unhash.cpp
 )
